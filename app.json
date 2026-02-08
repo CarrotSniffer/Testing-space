@@ -30,6 +30,9 @@
       "shortName": "MyApp",
       "themeColor": "#1a1a2e",
       "backgroundColor": "#1a1a2e"
+    },
+    "experiments": {
+      "baseUrl": "/Testing-space"
     }
   }
 }
