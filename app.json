@@ -25,7 +25,11 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "My App",
+      "shortName": "MyApp",
+      "themeColor": "#1a1a2e",
+      "backgroundColor": "#1a1a2e"
     }
   }
 }
