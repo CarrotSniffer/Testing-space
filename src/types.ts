@@ -12,14 +12,6 @@ export interface Building {
   level: number;
 }
 
-export interface GameState {
-  grid: Building[][];
-  money: number;
-  population: number;
-  happiness: number;
-  tick: number;
-}
-
 export interface BuildingInfo {
   type: BuildingType;
   label: string;
@@ -29,114 +21,62 @@ export interface BuildingInfo {
   popEffect: number;
   incomeEffect: number;
   happinessEffect: number;
-  height: number;
-  topColor: string;
-  leftColor: string;
-  rightColor: string;
+  height: number;       // visual height in px for 3D extrusion
+  topColor: string;     // roof / top face
+  leftColor: string;    // left face (lit)
+  rightColor: string;   // right face (shadow)
 }
 
-export const GRID_SIZE = 12;
+export interface GameState {
+  grid: Building[][];
+  money: number;
+  population: number;
+  happiness: number;
+  tick: number;
+}
 
-export const TILE_WIDTH = 64;
-export const TILE_HEIGHT = 32;
+export const GRID = 14;
+export const TW = 56;   // tile width
+export const TH = 28;   // tile height (2:1 iso ratio)
 
 export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
   empty: {
-    type: 'empty',
-    label: 'Clear',
-    emoji: '',
-    cost: 0,
-    description: 'Remove a building',
-    popEffect: 0,
-    incomeEffect: 0,
-    happinessEffect: 0,
-    height: 0,
-    topColor: '#4a7c3f',
-    leftColor: '#3d6834',
-    rightColor: '#35592d',
+    type: 'empty', label: 'Clear', emoji: '🗑️', cost: 0,
+    description: 'Demolish', popEffect: 0, incomeEffect: 0, happinessEffect: 0,
+    height: 0, topColor: '', leftColor: '', rightColor: '',
   },
   residential: {
-    type: 'residential',
-    label: 'House',
-    emoji: '🏠',
-    cost: 100,
-    description: '+10 pop, +$5 tax',
-    popEffect: 10,
-    incomeEffect: 5,
-    happinessEffect: -1,
-    height: 20,
-    topColor: '#5b8dd9',
-    leftColor: '#4070b8',
-    rightColor: '#345d9a',
+    type: 'residential', label: 'House', emoji: '🏠', cost: 100,
+    description: '+10 pop, +$5', popEffect: 10, incomeEffect: 5, happinessEffect: -1,
+    height: 16, topColor: '#6b9ee0', leftColor: '#4a7cc4', rightColor: '#3966a8',
   },
   commercial: {
-    type: 'commercial',
-    label: 'Shop',
-    emoji: '🏪',
-    cost: 200,
-    description: '+$15 income',
-    popEffect: 0,
-    incomeEffect: 15,
-    happinessEffect: 2,
-    height: 28,
-    topColor: '#d4a843',
-    leftColor: '#b8902a',
-    rightColor: '#9a7a22',
+    type: 'commercial', label: 'Shop', emoji: '🏪', cost: 200,
+    description: '+$15', popEffect: 0, incomeEffect: 15, happinessEffect: 2,
+    height: 22, topColor: '#e0b84a', leftColor: '#c49a30', rightColor: '#a88028',
   },
   industrial: {
-    type: 'industrial',
-    label: 'Factory',
-    emoji: '🏭',
-    cost: 300,
-    description: '+$25 income, -5 happy',
-    popEffect: 0,
-    incomeEffect: 25,
-    happinessEffect: -5,
-    height: 24,
-    topColor: '#b05a4a',
-    leftColor: '#954838',
-    rightColor: '#7d3c2f',
+    type: 'industrial', label: 'Factory', emoji: '🏭', cost: 300,
+    description: '+$25, -5 happy', popEffect: 0, incomeEffect: 25, happinessEffect: -5,
+    height: 18, topColor: '#c06050', leftColor: '#a04838', rightColor: '#883830',
   },
   park: {
-    type: 'park',
-    label: 'Park',
-    emoji: '🌳',
-    cost: 50,
-    description: '+8 happy',
-    popEffect: 0,
-    incomeEffect: -2,
-    happinessEffect: 8,
-    height: 6,
-    topColor: '#5aad4e',
-    leftColor: '#4a9340',
-    rightColor: '#3d7d35',
+    type: 'park', label: 'Park', emoji: '🌳', cost: 50,
+    description: '+8 happy', popEffect: 0, incomeEffect: -2, happinessEffect: 8,
+    height: 4, topColor: '#5ab84e', leftColor: '#489a3e', rightColor: '#3a8032',
   },
   road: {
-    type: 'road',
-    label: 'Road',
-    emoji: '',
-    cost: 25,
-    description: 'Connect zones',
-    popEffect: 0,
-    incomeEffect: 0,
-    happinessEffect: 0,
-    height: 1,
-    topColor: '#777777',
-    leftColor: '#666666',
-    rightColor: '#555555',
+    type: 'road', label: 'Road', emoji: '🛤️', cost: 25,
+    description: 'Connect', popEffect: 0, incomeEffect: 0, happinessEffect: 0,
+    height: 2, topColor: '#888888', leftColor: '#707070', rightColor: '#5a5a5a',
   },
   power: {
-    type: 'power',
-    label: 'Power',
-    emoji: '⚡',
-    cost: 500,
-    description: 'Powers 20 buildings',
-    popEffect: 0,
-    incomeEffect: -10,
-    happinessEffect: -2,
-    height: 32,
-    topColor: '#d4c44a',
-    leftColor: '#b8a83a',
-    rightColor: '#9a8e30',
+    type: 'power', label: 'Power', emoji: '⚡', cost: 500,
+    description: 'Powers 20', popEffect: 0, incomeEffect: -10, happinessEffect: -2,
+    height: 28, topColor: '#e0cc50', leftColor: '#c4b038', rightColor: '#a89428',
   },
 };
+
+export const BUILD_ORDER: BuildingType[] = [
+  'residential', 'commercial', 'industrial', 'park', 'road', 'power', 'empty',
+];

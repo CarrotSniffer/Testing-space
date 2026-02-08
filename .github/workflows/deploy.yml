@@ -29,9 +29,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npx expo export --platform web
-        env:
-          NODE_ENV: production
+      - run: npm run build
 
       - uses: actions/configure-pages@v4
 
