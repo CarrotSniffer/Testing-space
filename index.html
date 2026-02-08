@@ -85,6 +85,26 @@
       opacity: 0; transition: opacity 0.25s;
     }
     #toast.show { opacity: 1; }
+
+    /* Rotate button */
+    #rotate-btn {
+      position: absolute; right: 12px;
+      top: calc(env(safe-area-inset-top, 12px) + 70px);
+      width: 44px; height: 44px;
+      background: rgba(30,40,65,0.85);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; z-index: 10;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    #rotate-btn:active { background: rgba(233,69,96,0.3); }
+    #rotate-btn svg {
+      width: 22px; height: 22px;
+      fill: none; stroke: #aabbdd; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
   </style>
 </head>
 <body>
@@ -106,7 +126,11 @@
     </div>
   </div>
 
-  <div id="toolbar" id="toolbar"></div>
+  <div id="rotate-btn">
+    <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  </div>
+
+  <div id="toolbar"></div>
   <div id="toast"></div>
 
   <script type="module" src="/src/main.ts"></script>

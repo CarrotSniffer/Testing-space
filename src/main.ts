@@ -1,11 +1,57 @@
-import { BuildingType, BUILDINGS, BUILD_ORDER } from './types';
+import { BuildingType, BUILDINGS, BUILD_ORDER, GameState, Building, GRID } from './types';
 import { createInitialState, gameTick, placeBuilding, calculateIncome, updateCitizens, updateSmoke } from './gameLogic';
 import { render } from './renderer';
 import { createInputState, setupInput } from './input';
 
+// ── Save / Load ─────────────────────────────────────────────
+
+const SAVE_KEY = 'minicity_save';
+
+interface SaveData {
+  grid: Building[][];
+  money: number;
+  population: number;
+  happiness: number;
+  tick: number;
+}
+
+function saveGame(state: GameState) {
+  const data: SaveData = {
+    grid: state.grid,
+    money: state.money,
+    population: state.population,
+    happiness: state.happiness,
+    tick: state.tick,
+  };
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  } catch (_) { /* storage full or unavailable */ }
+}
+
+function loadGame(): GameState | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const data: SaveData = JSON.parse(raw);
+    // Validate grid
+    if (!data.grid || data.grid.length !== GRID) return null;
+    return {
+      grid: data.grid,
+      money: data.money ?? 1000,
+      population: data.population ?? 0,
+      happiness: data.happiness ?? 50,
+      tick: data.tick ?? 0,
+      citizens: [],
+      smoke: [],
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 // ── State ───────────────────────────────────────────────────
 
-let state = createInitialState();
+let state = loadGame() || createInitialState();
 let selected: BuildingType = 'residential';
 const input = createInputState();
 
@@ -55,13 +101,13 @@ function updateHUD() {
 // ── Toolbar ─────────────────────────────────────────────────
 
 const TOOL_ICONS: Record<BuildingType, string> = {
-  empty: '✕',
-  residential: '⌂',
+  empty: '\u2715',
+  residential: '\u2302',
   commercial: '$',
-  industrial: '⚙',
-  park: '♣',
-  road: '═',
-  power: '⚡',
+  industrial: '\u2699',
+  park: '\u2663',
+  road: '\u2550',
+  power: '\u26A1',
 };
 
 function buildToolbar() {
@@ -90,6 +136,16 @@ function buildToolbar() {
   }
 }
 
+// ── Rotation button ─────────────────────────────────────────
+
+const rotateBtn = document.getElementById('rotate-btn')!;
+rotateBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  input.rotation = (input.rotation + 1) % 4;
+  const dirs = ['N', 'E', 'S', 'W'];
+  showToast('View: ' + dirs[input.rotation]);
+});
+
 // ── Input ───────────────────────────────────────────────────
 
 setupInput(canvas, input, (r, c) => {
@@ -103,6 +159,7 @@ setupInput(canvas, input, (r, c) => {
     }
     updateHUD();
     buildToolbar();
+    saveGame(state);
   } else {
     if (state.grid[r][c].type !== 'empty' && selected !== 'empty') {
       showToast('Tile occupied');
@@ -118,6 +175,7 @@ setInterval(() => {
   state = gameTick(state);
   updateHUD();
   buildToolbar();
+  saveGame(state);
 }, 2000);
 
 // ── Render loop (60fps, updates citizens + smoke every frame) ──
@@ -135,7 +193,7 @@ function frame(now: number) {
     smoke: updateSmoke(state.smoke, dt),
   };
 
-  render(ctx, canvas, state, input.camX, input.camY, input.hoverR, input.hoverC);
+  render(ctx, canvas, state, input.camX, input.camY, input.zoom, input.rotation, input.hoverR, input.hoverC);
   requestAnimationFrame(frame);
 }
 
