@@ -29,9 +29,16 @@ export interface BuildingInfo {
   popEffect: number;
   incomeEffect: number;
   happinessEffect: number;
+  height: number;
+  topColor: string;
+  leftColor: string;
+  rightColor: string;
 }
 
 export const GRID_SIZE = 12;
+
+export const TILE_WIDTH = 64;
+export const TILE_HEIGHT = 32;
 
 export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
   empty: {
@@ -43,6 +50,10 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 0,
     incomeEffect: 0,
     happinessEffect: 0,
+    height: 0,
+    topColor: '#4a7c3f',
+    leftColor: '#3d6834',
+    rightColor: '#35592d',
   },
   residential: {
     type: 'residential',
@@ -53,6 +64,10 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 10,
     incomeEffect: 5,
     happinessEffect: -1,
+    height: 20,
+    topColor: '#5b8dd9',
+    leftColor: '#4070b8',
+    rightColor: '#345d9a',
   },
   commercial: {
     type: 'commercial',
@@ -63,6 +78,10 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 0,
     incomeEffect: 15,
     happinessEffect: 2,
+    height: 28,
+    topColor: '#d4a843',
+    leftColor: '#b8902a',
+    rightColor: '#9a7a22',
   },
   industrial: {
     type: 'industrial',
@@ -73,6 +92,10 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 0,
     incomeEffect: 25,
     happinessEffect: -5,
+    height: 24,
+    topColor: '#b05a4a',
+    leftColor: '#954838',
+    rightColor: '#7d3c2f',
   },
   park: {
     type: 'park',
@@ -83,6 +106,10 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 0,
     incomeEffect: -2,
     happinessEffect: 8,
+    height: 6,
+    topColor: '#5aad4e',
+    leftColor: '#4a9340',
+    rightColor: '#3d7d35',
   },
   road: {
     type: 'road',
@@ -93,6 +120,10 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 0,
     incomeEffect: 0,
     happinessEffect: 0,
+    height: 1,
+    topColor: '#777777',
+    leftColor: '#666666',
+    rightColor: '#555555',
   },
   power: {
     type: 'power',
@@ -103,5 +134,9 @@ export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
     popEffect: 0,
     incomeEffect: -10,
     happinessEffect: -2,
+    height: 32,
+    topColor: '#d4c44a',
+    leftColor: '#b8a83a',
+    rightColor: '#9a8e30',
   },
 };
