@@ -26,8 +26,8 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "name": "My App",
-      "shortName": "MyApp",
+      "name": "MiniCity",
+      "shortName": "MiniCity",
       "themeColor": "#1a1a2e",
       "backgroundColor": "#1a1a2e"
     },
