@@ -1,14 +1,16 @@
 import { BuildingType, BUILDINGS, BUILD_ORDER } from './types';
-import { createInitialState, gameTick, placeBuilding, calculateIncome } from './gameLogic';
+import { createInitialState, gameTick, placeBuilding, calculateIncome, updateCitizens, updateSmoke } from './gameLogic';
 import { render } from './renderer';
 import { createInputState, setupInput } from './input';
 
-// --- State ---
+// ── State ───────────────────────────────────────────────────
+
 let state = createInitialState();
 let selected: BuildingType = 'residential';
 const input = createInputState();
 
-// --- Canvas setup ---
+// ── Canvas ──────────────────────────────────────────────────
+
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
@@ -22,7 +24,8 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-// --- HUD ---
+// ── HUD ─────────────────────────────────────────────────────
+
 const hudMoney = document.getElementById('hud-money')!;
 const hudIncome = document.getElementById('hud-income')!;
 const hudPop = document.getElementById('hud-pop')!;
@@ -49,7 +52,18 @@ function updateHUD() {
     state.happiness >= 70 ? '#4ade80' : state.happiness >= 40 ? '#facc15' : '#f87171';
 }
 
-// --- Toolbar ---
+// ── Toolbar ─────────────────────────────────────────────────
+
+const TOOL_ICONS: Record<BuildingType, string> = {
+  empty: '✕',
+  residential: '⌂',
+  commercial: '$',
+  industrial: '⚙',
+  park: '♣',
+  road: '═',
+  power: '⚡',
+};
+
 function buildToolbar() {
   const toolbar = document.getElementById('toolbar')!;
   toolbar.innerHTML = '';
@@ -61,7 +75,7 @@ function buildToolbar() {
     if (info.cost > state.money && type !== 'empty') btn.classList.add('disabled');
 
     btn.innerHTML = `
-      <span class="tool-emoji">${info.emoji}</span>
+      <span class="tool-icon">${TOOL_ICONS[type]}</span>
       <span class="tool-name">${info.label}</span>
       ${info.cost > 0 ? `<span class="tool-cost">$${info.cost}</span>` : ''}
     `;
@@ -76,7 +90,8 @@ function buildToolbar() {
   }
 }
 
-// --- Input ---
+// ── Input ───────────────────────────────────────────────────
+
 setupInput(canvas, input, (r, c) => {
   const result = placeBuilding(state, r, c, selected);
   if (result) {
@@ -97,20 +112,35 @@ setupInput(canvas, input, (r, c) => {
   }
 });
 
-// --- Game tick ---
+// ── Game tick (economy, 2s interval) ────────────────────────
+
 setInterval(() => {
   state = gameTick(state);
   updateHUD();
   buildToolbar();
 }, 2000);
 
-// --- Render loop ---
-function frame() {
+// ── Render loop (60fps, updates citizens + smoke every frame) ──
+
+let lastTime = 0;
+
+function frame(now: number) {
+  const dt = lastTime ? now - lastTime : 16;
+  lastTime = now;
+
+  // Update animations
+  state = {
+    ...state,
+    citizens: updateCitizens(state, dt),
+    smoke: updateSmoke(state.smoke, dt),
+  };
+
   render(ctx, canvas, state, input.camX, input.camY, input.hoverR, input.hoverC);
   requestAnimationFrame(frame);
 }
 
-// --- Init ---
+// ── Init ────────────────────────────────────────────────────
+
 updateHUD();
 buildToolbar();
 requestAnimationFrame(frame);

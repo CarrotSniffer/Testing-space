@@ -15,16 +15,35 @@ export interface Building {
 export interface BuildingInfo {
   type: BuildingType;
   label: string;
-  emoji: string;
+  icon: string;
   cost: number;
   description: string;
   popEffect: number;
   incomeEffect: number;
   happinessEffect: number;
-  height: number;       // visual height in px for 3D extrusion
-  topColor: string;     // roof / top face
-  leftColor: string;    // left face (lit)
-  rightColor: string;   // right face (shadow)
+  height: number;
+  wallLeft: string;
+  wallRight: string;
+  roofColor: string;
+}
+
+export interface Citizen {
+  x: number;   // world x (isometric)
+  y: number;   // world y (isometric)
+  tx: number;  // target x
+  ty: number;  // target y
+  color: string;
+  speed: number;
+}
+
+export interface SmokeParticle {
+  x: number;
+  y: number;
+  age: number;
+  maxAge: number;
+  vx: number;
+  vy: number;
+  size: number;
 }
 
 export interface GameState {
@@ -33,47 +52,60 @@ export interface GameState {
   population: number;
   happiness: number;
   tick: number;
+  citizens: Citizen[];
+  smoke: SmokeParticle[];
 }
 
 export const GRID = 14;
-export const TW = 56;   // tile width
-export const TH = 28;   // tile height (2:1 iso ratio)
+export const TW = 64;
+export const TH = 32;
+export const HW = TW / 2;
+export const HH = TH / 2;
+
+const CITIZEN_COLORS = [
+  '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+  '#1abc9c', '#e67e22', '#e84393', '#00b894', '#fdcb6e',
+];
+
+export function randomCitizenColor(): string {
+  return CITIZEN_COLORS[Math.floor(Math.random() * CITIZEN_COLORS.length)];
+}
 
 export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
   empty: {
-    type: 'empty', label: 'Clear', emoji: '🗑️', cost: 0,
+    type: 'empty', label: 'Clear', icon: 'X', cost: 0,
     description: 'Demolish', popEffect: 0, incomeEffect: 0, happinessEffect: 0,
-    height: 0, topColor: '', leftColor: '', rightColor: '',
+    height: 0, wallLeft: '', wallRight: '', roofColor: '',
   },
   residential: {
-    type: 'residential', label: 'House', emoji: '🏠', cost: 100,
+    type: 'residential', label: 'House', icon: 'H', cost: 100,
     description: '+10 pop, +$5', popEffect: 10, incomeEffect: 5, happinessEffect: -1,
-    height: 16, topColor: '#6b9ee0', leftColor: '#4a7cc4', rightColor: '#3966a8',
+    height: 18, wallLeft: '#d4c4a0', wallRight: '#baa880', roofColor: '#b04030',
   },
   commercial: {
-    type: 'commercial', label: 'Shop', emoji: '🏪', cost: 200,
+    type: 'commercial', label: 'Shop', icon: 'S', cost: 200,
     description: '+$15', popEffect: 0, incomeEffect: 15, happinessEffect: 2,
-    height: 22, topColor: '#e0b84a', leftColor: '#c49a30', rightColor: '#a88028',
+    height: 26, wallLeft: '#e8dcc8', wallRight: '#ccc0a8', roofColor: '#3080c0',
   },
   industrial: {
-    type: 'industrial', label: 'Factory', emoji: '🏭', cost: 300,
+    type: 'industrial', label: 'Factory', icon: 'F', cost: 300,
     description: '+$25, -5 happy', popEffect: 0, incomeEffect: 25, happinessEffect: -5,
-    height: 18, topColor: '#c06050', leftColor: '#a04838', rightColor: '#883830',
+    height: 20, wallLeft: '#a0a0a0', wallRight: '#888888', roofColor: '#606060',
   },
   park: {
-    type: 'park', label: 'Park', emoji: '🌳', cost: 50,
+    type: 'park', label: 'Park', icon: 'P', cost: 50,
     description: '+8 happy', popEffect: 0, incomeEffect: -2, happinessEffect: 8,
-    height: 4, topColor: '#5ab84e', leftColor: '#489a3e', rightColor: '#3a8032',
+    height: 2, wallLeft: '#3a8032', wallRight: '#2e6828', roofColor: '#4aa040',
   },
   road: {
-    type: 'road', label: 'Road', emoji: '🛤️', cost: 25,
+    type: 'road', label: 'Road', icon: 'R', cost: 25,
     description: 'Connect', popEffect: 0, incomeEffect: 0, happinessEffect: 0,
-    height: 2, topColor: '#888888', leftColor: '#707070', rightColor: '#5a5a5a',
+    height: 1, wallLeft: '#555', wallRight: '#444', roofColor: '#666',
   },
   power: {
-    type: 'power', label: 'Power', emoji: '⚡', cost: 500,
+    type: 'power', label: 'Power', icon: 'Z', cost: 500,
     description: 'Powers 20', popEffect: 0, incomeEffect: -10, happinessEffect: -2,
-    height: 28, topColor: '#e0cc50', leftColor: '#c4b038', rightColor: '#a89428',
+    height: 30, wallLeft: '#c0b070', wallRight: '#a09060', roofColor: '#d0c050',
   },
 };
 
