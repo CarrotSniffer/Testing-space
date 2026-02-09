@@ -25,71 +25,51 @@
       position: absolute; top: 0; left: 0;
     }
 
-    /* HUD */
+    /* ── HUD ─────────────────────────────────────── */
     #hud {
       position: absolute; top: 0; left: 0; right: 0;
       padding: env(safe-area-inset-top, 12px) 12px 10px;
       background: linear-gradient(to bottom, rgba(10,14,26,0.95), rgba(10,14,26,0.7) 80%, transparent);
-      display: flex; justify-content: space-around;
+      display: flex; justify-content: space-around; align-items: flex-start;
       pointer-events: none; z-index: 10;
     }
-    .hud-stat { text-align: center; }
+    .hud-stat { text-align: center; min-width: 60px; }
     .hud-label {
-      font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+      font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
       color: #546080; text-transform: uppercase;
     }
-    .hud-value { font-size: 22px; font-weight: 800; color: #fff; }
+    .hud-value { font-size: 20px; font-weight: 800; color: #fff; }
     .hud-sub { font-size: 11px; font-weight: 600; }
 
-    /* Toolbar */
-    #toolbar {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      padding: 8px 4px calc(env(safe-area-inset-bottom, 8px) + 4px);
-      background: linear-gradient(to top, rgba(10,14,26,0.97), rgba(10,14,26,0.8) 85%, transparent);
+    /* ── Speed Controls ──────────────────────────── */
+    #speed-controls {
+      position: absolute;
+      top: calc(env(safe-area-inset-top, 12px) + 68px);
+      left: 12px;
+      display: flex; gap: 4px;
       z-index: 10;
-      display: flex; gap: 6px;
-      overflow-x: auto; overflow-y: hidden;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
     }
-    #toolbar::-webkit-scrollbar { display: none; }
-    .tool-btn {
-      flex-shrink: 0;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 8px 10px 6px; min-width: 64px;
-      background: rgba(30,40,65,0.8); border-radius: 14px;
-      border: 2px solid transparent;
+    .speed-btn {
+      width: 32px; height: 28px;
+      background: rgba(30,40,65,0.85);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      color: #8899bb; font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
       cursor: pointer; transition: all 0.15s;
       -webkit-tap-highlight-color: transparent;
     }
-    .tool-btn.active { border-color: #e94560; background: rgba(233,69,96,0.15); }
-    .tool-btn.disabled { opacity: 0.35; }
-    .tool-icon {
-      font-size: 22px; line-height: 1.2; color: #aabbdd;
-      width: 30px; height: 30px;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,0.06); border-radius: 8px;
-    }
-    .tool-btn.active .tool-icon { color: #e94560; background: rgba(233,69,96,0.15); }
-    .tool-name { font-size: 10px; font-weight: 700; color: #8899bb; margin-top: 3px; }
-    .tool-btn.active .tool-name { color: #e94560; }
-    .tool-cost { font-size: 9px; color: #556; margin-top: 1px; }
+    .speed-btn.active { background: rgba(100,160,255,0.2); border-color: #6090e0; color: #a0c0ff; }
+    .speed-btn:active { background: rgba(100,160,255,0.3); }
 
-    /* Message toast */
-    #toast {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(233,69,96,0.92); color: #fff;
-      padding: 8px 20px; border-radius: 20px;
-      font-size: 14px; font-weight: 700;
-      pointer-events: none; z-index: 20;
-      opacity: 0; transition: opacity 0.25s;
-    }
-    #toast.show { opacity: 1; }
-
-    /* Rotate button */
-    #rotate-btn {
+    /* ── Side Buttons ────────────────────────────── */
+    .side-btns {
       position: absolute; right: 12px;
-      top: calc(env(safe-area-inset-top, 12px) + 70px);
+      top: calc(env(safe-area-inset-top, 12px) + 68px);
+      display: flex; flex-direction: column; gap: 8px;
+      z-index: 10;
+    }
+    .side-btn {
       width: 44px; height: 44px;
       background: rgba(30,40,65,0.85);
       border: 2px solid rgba(255,255,255,0.15);
@@ -98,18 +78,358 @@
       cursor: pointer; z-index: 10;
       -webkit-tap-highlight-color: transparent;
       transition: background 0.15s;
+      color: #aabbdd; font-size: 16px;
     }
-    #rotate-btn:active { background: rgba(233,69,96,0.3); }
-    #rotate-btn svg {
+    .side-btn:active { background: rgba(233,69,96,0.3); }
+    .side-btn svg {
       width: 22px; height: 22px;
       fill: none; stroke: #aabbdd; stroke-width: 2;
       stroke-linecap: round; stroke-linejoin: round;
+    }
+    .side-btn-label {
+      font-size: 8px; font-weight: 700; color: #546080;
+      text-align: center; margin-top: 2px;
+    }
+
+    /* ── Toolbar ─────────────────────────────────── */
+    #toolbar {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 6px 4px calc(env(safe-area-inset-bottom, 8px) + 4px);
+      background: linear-gradient(to top, rgba(10,14,26,0.97), rgba(10,14,26,0.85) 85%, transparent);
+      z-index: 10;
+      display: flex; gap: 4px; align-items: center;
+      overflow-x: auto; overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    #toolbar::-webkit-scrollbar { display: none; }
+
+    .toolbar-cat {
+      flex-shrink: 0;
+      writing-mode: vertical-lr;
+      text-orientation: mixed;
+      font-size: 8px; font-weight: 800; letter-spacing: 1px;
+      color: #405070; text-transform: uppercase;
+      padding: 4px 2px;
+      border-left: 2px solid rgba(255,255,255,0.06);
+      margin-left: 2px;
+    }
+
+    .tool-btn {
+      flex-shrink: 0;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 6px 8px 4px; min-width: 56px;
+      background: rgba(30,40,65,0.8); border-radius: 12px;
+      border: 2px solid transparent;
+      cursor: pointer; transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tool-btn.active { border-color: #e94560; background: rgba(233,69,96,0.15); }
+    .tool-btn.inspect-active { border-color: #60a0ff; background: rgba(96,160,255,0.15); }
+    .tool-btn.disabled { opacity: 0.35; }
+    .tool-icon {
+      font-size: 18px; line-height: 1.2; color: #aabbdd;
+      width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.06); border-radius: 8px;
+    }
+    .tool-btn.active .tool-icon { color: #e94560; background: rgba(233,69,96,0.15); }
+    .tool-btn.inspect-active .tool-icon { color: #60a0ff; background: rgba(96,160,255,0.15); }
+    .tool-name { font-size: 9px; font-weight: 700; color: #8899bb; margin-top: 2px; }
+    .tool-btn.active .tool-name { color: #e94560; }
+    .tool-btn.inspect-active .tool-name { color: #60a0ff; }
+    .tool-cost { font-size: 8px; color: #556; margin-top: 1px; }
+
+    /* ── Toast ───────────────────────────────────── */
+    #toast {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(233,69,96,0.92); color: #fff;
+      padding: 8px 20px; border-radius: 20px;
+      font-size: 14px; font-weight: 700;
+      pointer-events: none; z-index: 30;
+      opacity: 0; transition: opacity 0.25s;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── Achievement Toast ───────────────────────── */
+    #achievement-toast {
+      position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+      background: rgba(20,30,50,0.95);
+      border: 2px solid #ffd700;
+      color: #ffd700;
+      padding: 10px 24px; border-radius: 16px;
+      font-size: 14px; font-weight: 700;
+      pointer-events: none; z-index: 35;
+      opacity: 0; transition: opacity 0.4s, transform 0.4s;
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 4px 20px rgba(255,215,0,0.3);
+    }
+    #achievement-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .ach-toast-icon { font-size: 20px; }
+
+    /* ── Event Banner ────────────────────────────── */
+    .event-banner {
+      position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+      padding: 6px 16px; border-radius: 12px;
+      font-size: 11px; font-weight: 700;
+      pointer-events: none; z-index: 15;
+      opacity: 0; transition: opacity 0.3s;
+      color: #fff;
+    }
+    .event-banner.show { opacity: 1; }
+    .event-fire { background: rgba(248,113,113,0.85); }
+    .event-boom { background: rgba(74,222,128,0.85); }
+    .event-storm { background: rgba(100,120,180,0.85); }
+    .event-festival { background: rgba(250,204,21,0.85); color: #333; }
+    .event-population_surge { background: rgba(96,160,255,0.85); }
+
+    /* ── Notifications ───────────────────────────── */
+    #notifications {
+      position: absolute; left: 12px;
+      bottom: calc(env(safe-area-inset-bottom, 8px) + 80px);
+      z-index: 15; pointer-events: none;
+      display: flex; flex-direction: column; gap: 4px;
+      max-width: 260px;
+    }
+    .notif-item {
+      background: rgba(20,30,50,0.9);
+      color: #ccc; font-size: 11px; font-weight: 600;
+      padding: 6px 10px; border-radius: 8px;
+      border-left: 3px solid #888;
+      transition: opacity 0.3s;
+    }
+
+    /* ── Building Info Panel ──────────────────────── */
+    #info-panel {
+      position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+      width: calc(100% - 24px); max-width: 340px;
+      background: rgba(15,22,40,0.96);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 16px;
+      padding: 16px;
+      z-index: 20;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      transform: translateX(-50%) translateY(10px);
+      backdrop-filter: blur(10px);
+    }
+    #info-panel.show {
+      opacity: 1; pointer-events: auto;
+      transform: translateX(-50%) translateY(0);
+    }
+    #info-close {
+      position: absolute; top: 10px; right: 12px;
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,0.08); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #8899bb; font-size: 16px; font-weight: 700;
+      cursor: pointer; border: none;
+    }
+    .info-header {
+      display: flex; gap: 12px; align-items: center;
+      margin-bottom: 12px;
+    }
+    .info-icon {
+      font-size: 28px; color: #aabbdd;
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.06); border-radius: 12px;
+    }
+    .info-title { font-size: 16px; font-weight: 800; color: #fff; }
+    .info-level {
+      font-size: 12px; font-weight: 700; color: #ffd700;
+      background: rgba(255,215,0,0.15); padding: 2px 6px; border-radius: 6px;
+      margin-left: 6px;
+    }
+    .info-desc { font-size: 11px; color: #8899bb; margin-top: 2px; }
+    .info-stats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .info-stat {
+      display: flex; justify-content: space-between;
+      font-size: 13px; font-weight: 600; color: #ccc;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .info-stat.adj { font-size: 11px; color: #999; }
+    .info-fire {
+      background: rgba(248,113,113,0.2); color: #f87171;
+      padding: 8px 12px; border-radius: 8px;
+      font-size: 12px; font-weight: 700;
+      text-align: center; margin-bottom: 8px;
+    }
+    .info-upgrade-btn {
+      width: 100%; padding: 10px;
+      background: rgba(74,222,128,0.15);
+      border: 2px solid #4ade80; border-radius: 10px;
+      color: #4ade80; font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: all 0.15s;
+      text-align: center;
+    }
+    .info-upgrade-btn:active { background: rgba(74,222,128,0.3); }
+    .info-upgrade-btn.disabled {
+      border-color: #555; color: #555;
+      background: rgba(255,255,255,0.03);
+      pointer-events: none;
+    }
+    .info-maxlevel {
+      text-align: center; font-size: 11px; font-weight: 700;
+      color: #ffd700; padding: 6px;
+      background: rgba(255,215,0,0.1); border-radius: 8px;
+    }
+
+    /* ── Stats Panel ─────────────────────────────── */
+    #stats-panel {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: calc(100% - 32px); max-width: 360px;
+      max-height: 80vh;
+      background: rgba(12,18,35,0.97);
+      border: 1.5px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 20px 16px;
+      z-index: 25;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      overflow-y: auto;
+      backdrop-filter: blur(10px);
+    }
+    #stats-panel.show {
+      opacity: 1; pointer-events: auto;
+    }
+    #stats-close {
+      position: absolute; top: 12px; right: 14px;
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,0.08); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #8899bb; font-size: 16px; font-weight: 700;
+      cursor: pointer; border: none;
+    }
+    .stats-panel-title {
+      font-size: 16px; font-weight: 800; color: #fff;
+      margin-bottom: 14px;
+    }
+    .stats-section { margin-bottom: 12px; }
+    .stats-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
+      color: #546080; text-transform: uppercase;
+      margin-bottom: 4px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .stats-row {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: #bbb; padding: 3px 0;
+    }
+    .stats-row.dim { color: #556; font-style: italic; }
+    .stats-row.event-row { color: #facc15; }
+
+    /* ── Achievements Panel ──────────────────────── */
+    #achievements-panel {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: calc(100% - 32px); max-width: 360px;
+      max-height: 80vh;
+      background: rgba(12,18,35,0.97);
+      border: 1.5px solid rgba(255,215,0,0.2);
+      border-radius: 18px;
+      padding: 20px 16px;
+      z-index: 25;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s;
+      overflow-y: auto;
+      backdrop-filter: blur(10px);
+    }
+    #achievements-panel.show { opacity: 1; pointer-events: auto; }
+    #ach-close {
+      position: absolute; top: 12px; right: 14px;
+      width: 28px; height: 28px;
+      background: rgba(255,255,255,0.08); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: #8899bb; font-size: 16px; font-weight: 700;
+      cursor: pointer; border: none;
+    }
+    .ach-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px;
+    }
+    .ach-header-title { font-size: 16px; font-weight: 800; color: #ffd700; }
+    #ach-count { font-size: 13px; font-weight: 700; color: #8899bb; }
+    .ach-item {
+      display: flex; gap: 10px; align-items: center;
+      padding: 8px; margin-bottom: 6px;
+      border-radius: 10px;
+      transition: background 0.15s;
+    }
+    .ach-item.unlocked {
+      background: rgba(255,215,0,0.08);
+      border: 1px solid rgba(255,215,0,0.15);
+    }
+    .ach-item.locked {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      opacity: 0.5;
+    }
+    .ach-icon {
+      font-size: 22px; width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,215,0,0.1); border-radius: 10px;
+      color: #ffd700;
+    }
+    .ach-item.locked .ach-icon { background: rgba(255,255,255,0.04); color: #556; }
+    .ach-name { font-size: 13px; font-weight: 700; color: #fff; }
+    .ach-item.locked .ach-name { color: #667; }
+    .ach-desc { font-size: 11px; color: #8899bb; }
+
+    /* ── Tutorial Overlay ────────────────────────── */
+    #tutorial {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 40;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .tutorial-card {
+      background: rgba(15,22,40,0.98);
+      border: 2px solid rgba(233,69,96,0.4);
+      border-radius: 20px;
+      padding: 28px 24px;
+      max-width: 340px; width: calc(100% - 40px);
+      text-align: center;
+    }
+    .tutorial-logo {
+      font-size: 36px; font-weight: 900; color: #e94560;
+      margin-bottom: 4px;
+    }
+    .tutorial-subtitle {
+      font-size: 11px; font-weight: 700; letter-spacing: 2px;
+      color: #546080; text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    #tutorial-text {
+      font-size: 15px; color: #ccc; line-height: 1.5;
+      margin-bottom: 24px; min-height: 60px;
+    }
+    .tutorial-btns { display: flex; gap: 10px; justify-content: center; }
+    .tutorial-btn {
+      padding: 10px 24px; border-radius: 12px;
+      font-size: 14px; font-weight: 700;
+      cursor: pointer; border: none;
+      transition: all 0.15s;
+    }
+    #tutorial-next {
+      background: #e94560; color: #fff;
+    }
+    #tutorial-next:active { background: #c0384f; }
+    #tutorial-skip {
+      background: rgba(255,255,255,0.06); color: #8899bb;
+    }
+    #tutorial-skip:active { background: rgba(255,255,255,0.12); }
+    #tutorial-progress {
+      font-size: 11px; color: #546080; margin-top: 12px;
     }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
 
+  <!-- HUD -->
   <div id="hud">
     <div class="hud-stat">
       <div class="hud-label">Money</div>
@@ -124,14 +444,87 @@
       <div class="hud-label">Happy</div>
       <div class="hud-value" id="hud-happy">50%</div>
     </div>
+    <div class="hud-stat">
+      <div class="hud-label">Time</div>
+      <div class="hud-value" id="hud-time" style="font-size:14px">Day</div>
+    </div>
   </div>
 
-  <div id="rotate-btn">
-    <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+  <!-- Speed Controls -->
+  <div id="speed-controls">
+    <div class="speed-btn" data-speed="0">||</div>
+    <div class="speed-btn active" data-speed="1">1x</div>
+    <div class="speed-btn" data-speed="2">2x</div>
+    <div class="speed-btn" data-speed="3">3x</div>
   </div>
 
+  <!-- Side Buttons -->
+  <div class="side-btns">
+    <div class="side-btn" id="rotate-btn">
+      <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+    </div>
+    <div class="side-btn" id="stats-btn" style="font-size:18px">
+      <svg viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1" fill="#aabbdd"/><rect x="10" y="6" width="4" height="15" rx="1" fill="#aabbdd"/><rect x="17" y="2" width="4" height="19" rx="1" fill="#aabbdd"/></svg>
+    </div>
+    <div class="side-btn" id="achievements-btn" style="font-size:20px; color:#ffd700;">
+      &#9733;
+    </div>
+    <div class="side-btn" id="new-game-btn" style="font-size:14px; color:#f87171;">
+      <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64" stroke="#f87171" stroke-width="2" fill="none"/><path d="M21 3v6h-6" stroke="#f87171" stroke-width="2" fill="none"/></svg>
+    </div>
+  </div>
+
+  <!-- Event Banner -->
+  <div id="event-banner" class="event-banner"></div>
+
+  <!-- Notifications -->
+  <div id="notifications"></div>
+
+  <!-- Building Info Panel -->
+  <div id="info-panel">
+    <button id="info-close">&times;</button>
+    <div id="info-content"></div>
+  </div>
+
+  <!-- Stats Panel -->
+  <div id="stats-panel">
+    <button id="stats-close">&times;</button>
+    <div class="stats-panel-title">City Statistics</div>
+    <div id="stats-content"></div>
+  </div>
+
+  <!-- Achievements Panel -->
+  <div id="achievements-panel">
+    <button id="ach-close">&times;</button>
+    <div class="ach-header">
+      <div class="ach-header-title">Achievements</div>
+      <div id="ach-count">0/12</div>
+    </div>
+    <div id="ach-content"></div>
+  </div>
+
+  <!-- Achievement Toast -->
+  <div id="achievement-toast"></div>
+
+  <!-- Toolbar -->
   <div id="toolbar"></div>
+
+  <!-- Toast -->
   <div id="toast"></div>
+
+  <!-- Tutorial -->
+  <div id="tutorial" style="display:none">
+    <div class="tutorial-card">
+      <div class="tutorial-logo">MiniCity</div>
+      <div class="tutorial-subtitle">City Builder</div>
+      <div id="tutorial-text"></div>
+      <div class="tutorial-btns">
+        <button class="tutorial-btn" id="tutorial-skip">Skip</button>
+        <button class="tutorial-btn" id="tutorial-next">Next</button>
+      </div>
+      <div id="tutorial-progress"></div>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

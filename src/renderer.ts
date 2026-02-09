@@ -12,7 +12,6 @@ function rotateCoord(r: number, c: number, rot: number): [number, number] {
 }
 
 function unrotateCoord(r: number, c: number, rot: number): [number, number] {
-  // Inverse rotation
   switch (rot % 4) {
     case 1: return [GRID - 1 - c, r];
     case 2: return [GRID - 1 - r, GRID - 1 - c];
@@ -77,13 +76,57 @@ function drawGround(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: nu
   ctx.stroke();
 }
 
-// ── Building: House (gabled roof, shutters, porch) ──────────────
+// ── Level indicator (stars) ─────────────────────────────────────
+
+function drawLevelStars(ctx: CanvasRenderingContext2D, cx: number, cy: number, level: number) {
+  if (level <= 1) return;
+  const count = level - 1; // 1 star for level 2, 2 stars for level 3
+  const startX = cx - count * 4;
+  for (let i = 0; i < count; i++) {
+    const sx = startX + i * 8;
+    ctx.fillStyle = '#ffd700';
+    ctx.strokeStyle = '#b8960f';
+    ctx.lineWidth = 0.5;
+    drawStar(ctx, sx, cy, 3, 5);
+  }
+}
+
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, inner: number, outer: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+    const r = i === 0 ? outer : outer;
+    ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
+    const midAngle = angle + (2 * Math.PI) / 10;
+    ctx.lineTo(cx + Math.cos(midAngle) * inner, cy + Math.sin(midAngle) * inner);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+}
+
+// ── Fire effect ──────────────────────────────────────────────────
+
+function drawFireEffect(ctx: CanvasRenderingContext2D, cx: number, cy: number, tick: number) {
+  const t = tick * 0.15;
+  for (let i = 0; i < 6; i++) {
+    const fx = cx + Math.sin(t + i * 1.3) * 8 - 4;
+    const fy = cy + Math.cos(t + i * 0.9) * 3 - 6 - i * 2;
+    const s = 4 + Math.sin(t + i) * 2;
+    const alpha = 0.6 + Math.sin(t * 2 + i) * 0.3;
+    ctx.fillStyle = i < 3 ? `rgba(255,100,20,${alpha})` : `rgba(255,200,50,${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(fx, fy, s, s * 1.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ── Building: House ─────────────────────────────────────────────
 
 function drawResidential(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   const bh = 18;
   const peak = 12;
 
-  // Left wall
   leftFace(ctx, cx, cy, bh);
   ctx.fillStyle = '#e8dbc4';
   ctx.fill();
@@ -91,25 +134,20 @@ function drawResidential(ctx: CanvasRenderingContext2D, cx: number, cy: number) 
   ctx.lineWidth = 0.5;
   ctx.stroke();
 
-  // Left wall windows with shutters
   ctx.save();
   leftFace(ctx, cx, cy, bh);
   ctx.clip();
   for (let i = 0; i < 2; i++) {
     const wx = cx - HW + 6 + i * 13;
     const wy = cy + 4;
-    // Shutters
     ctx.fillStyle = '#5a7a5a';
     ctx.fillRect(wx - 2, wy - 1, 2, 7);
     ctx.fillRect(wx + 7, wy - 1, 2, 7);
-    // Window pane
     ctx.fillStyle = '#b8ddf8';
     ctx.fillRect(wx, wy, 7, 5);
-    // Window frame
     ctx.strokeStyle = '#f0e8d0';
     ctx.lineWidth = 0.8;
     ctx.strokeRect(wx, wy, 7, 5);
-    // Cross
     ctx.beginPath();
     ctx.moveTo(wx + 3.5, wy); ctx.lineTo(wx + 3.5, wy + 5);
     ctx.moveTo(wx, wy + 2.5); ctx.lineTo(wx + 7, wy + 2.5);
@@ -119,7 +157,6 @@ function drawResidential(ctx: CanvasRenderingContext2D, cx: number, cy: number) 
   }
   ctx.restore();
 
-  // Right wall
   rightFace(ctx, cx, cy, bh);
   ctx.fillStyle = '#d4c8a8';
   ctx.fill();
@@ -127,49 +164,43 @@ function drawResidential(ctx: CanvasRenderingContext2D, cx: number, cy: number) 
   ctx.lineWidth = 0.5;
   ctx.stroke();
 
-  // Right wall: door with porch, window
   ctx.save();
   rightFace(ctx, cx, cy, bh);
   ctx.clip();
-  // Porch step
   ctx.fillStyle = '#a09080';
   ctx.fillRect(cx + 3, cy + HH + bh - 3, 10, 3);
-  // Door
   ctx.fillStyle = '#8b5e3c';
   ctx.fillRect(cx + 5, cy + HH + bh - 12, 7, 9);
   ctx.strokeStyle = '#6a4428';
   ctx.lineWidth = 0.8;
   ctx.strokeRect(cx + 5, cy + HH + bh - 12, 7, 9);
-  // Door panels
   ctx.strokeStyle = '#7a5030';
   ctx.strokeRect(cx + 6, cy + HH + bh - 11, 2.5, 3.5);
   ctx.strokeRect(cx + 9, cy + HH + bh - 11, 2.5, 3.5);
-  // Door knob
   ctx.fillStyle = '#d4aa40';
   ctx.beginPath();
   ctx.arc(cx + 10.5, cy + HH + bh - 7, 0.8, 0, Math.PI * 2);
   ctx.fill();
-  // Window
+  const wy = cy + HH + 4;
   ctx.fillStyle = '#5a7a5a';
-  ctx.fillRect(cx + 15, wy_rw(cy) - 1, 2, 7);
-  ctx.fillRect(cx + 24, wy_rw(cy) - 1, 2, 7);
+  ctx.fillRect(cx + 15, wy - 1, 2, 7);
+  ctx.fillRect(cx + 24, wy - 1, 2, 7);
   ctx.fillStyle = '#b8ddf8';
-  ctx.fillRect(cx + 17, wy_rw(cy), 7, 5);
+  ctx.fillRect(cx + 17, wy, 7, 5);
   ctx.strokeStyle = '#f0e8d0';
   ctx.lineWidth = 0.6;
-  ctx.strokeRect(cx + 17, wy_rw(cy), 7, 5);
+  ctx.strokeRect(cx + 17, wy, 7, 5);
   ctx.restore();
 
   // Gabled roof - left slope
   ctx.beginPath();
-  ctx.moveTo(cx, cy - peak);       // ridge peak (center top)
-  ctx.lineTo(cx - HW - 2, cy + 1); // left eave (slight overhang)
-  ctx.lineTo(cx, cy + HH + 1);     // bottom eave
+  ctx.moveTo(cx, cy - peak);
+  ctx.lineTo(cx - HW - 2, cy + 1);
+  ctx.lineTo(cx, cy + HH + 1);
   ctx.closePath();
   ctx.fillStyle = '#b84835';
   ctx.fill();
 
-  // Roof tile lines on left slope
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(cx, cy - peak);
@@ -213,15 +244,11 @@ function drawResidential(ctx: CanvasRenderingContext2D, cx: number, cy: number) 
   ctx.fillRect(cx + HW * 0.3 - 0.5, cy - peak - 3, 6, 2);
 }
 
-// Helper for right wall window Y
-function wy_rw(cy: number) { return cy + HH + 4; }
-
-// ── Building: Commercial (tall shop with awning + sign) ──
+// ── Building: Commercial ────────────────────────────────────────
 
 function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   const bh = 26;
 
-  // Left wall
   leftFace(ctx, cx, cy, bh);
   ctx.fillStyle = '#e8dcc8';
   ctx.fill();
@@ -249,7 +276,6 @@ function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   }
   ctx.restore();
 
-  // Right wall
   rightFace(ctx, cx, cy, bh);
   ctx.fillStyle = '#ccc0a8';
   ctx.fill();
@@ -262,7 +288,6 @@ function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.strokeStyle = '#808080';
   ctx.lineWidth = 0.8;
   ctx.strokeRect(cx + 3, cy + HH + bh - 14, 20, 10);
-  // Mannequin/display
   ctx.fillStyle = '#e0a080';
   ctx.fillRect(cx + 8, cy + HH + bh - 12, 3, 6);
   ctx.fillRect(cx + 14, cy + HH + bh - 11, 3, 5);
@@ -271,7 +296,6 @@ function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.fillRect(cx + 15, cy + HH + 3, 6, 5);
   ctx.restore();
 
-  // Flat roof
   diamond(ctx, cx, cy, TW, TH);
   ctx.fillStyle = '#3080c0';
   ctx.fill();
@@ -289,7 +313,6 @@ function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.closePath();
   ctx.fillStyle = '#d04040';
   ctx.fill();
-  // Awning stripes
   ctx.save();
   ctx.beginPath();
   ctx.moveTo(cx, cy + HH);
@@ -304,7 +327,6 @@ function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   }
   ctx.restore();
 
-  // Sign
   ctx.fillStyle = '#f0e8c0';
   ctx.fillRect(cx + HW * 0.2, cy + 1, HW * 0.6, 4);
   ctx.fillStyle = '#d04040';
@@ -313,7 +335,7 @@ function drawCommercial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.fillText('SHOP', cx + HW * 0.5, cy + 4);
 }
 
-// ── Building: Industrial (factory with smokestacks) ──
+// ── Building: Industrial ────────────────────────────────────────
 
 function drawIndustrial(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   const bh = 20;
@@ -523,6 +545,318 @@ function drawPower(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
   ctx.fill();
 }
 
+// ── Hospital ────────────────────────────────────────────────────
+
+function drawHospital(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const bh = 24;
+
+  // Left wall - white/light gray
+  leftFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#f0f0f0';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  ctx.save();
+  leftFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Windows
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 2; col++) {
+      ctx.fillStyle = '#a0e0f0';
+      ctx.fillRect(cx - HW + 4 + col * 12, cy + 2 + row * 7, 7, 5);
+      ctx.strokeStyle = '#d0d0d0';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(cx - HW + 4 + col * 12, cy + 2 + row * 7, 7, 5);
+    }
+  }
+  ctx.restore();
+
+  // Right wall
+  rightFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#e0e0e0';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  ctx.save();
+  rightFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Entrance
+  ctx.fillStyle = '#80c0e0';
+  ctx.fillRect(cx + 6, cy + HH + bh - 12, 14, 12);
+  ctx.strokeStyle = '#6090b0';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(cx + 6, cy + HH + bh - 12, 14, 12);
+  // Red cross on entrance
+  ctx.fillStyle = '#e04040';
+  ctx.fillRect(cx + 11, cy + HH + bh - 10, 4, 8);
+  ctx.fillRect(cx + 9, cy + HH + bh - 8, 8, 4);
+  ctx.restore();
+
+  // Flat roof
+  diamond(ctx, cx, cy, TW, TH);
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fill();
+  diamond(ctx, cx, cy, TW - 6, TH - 3);
+  ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  // Red cross on roof
+  ctx.fillStyle = '#e04040';
+  ctx.fillRect(cx - 1.5, cy - 4, 3, 8);
+  ctx.fillRect(cx - 4, cy - 1.5, 8, 3);
+
+  // Helipad circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+  ctx.strokeStyle = '#d0d0d0';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+}
+
+// ── School ──────────────────────────────────────────────────────
+
+function drawSchool(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const bh = 22;
+
+  // Left wall - warm brick
+  leftFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#c8a070';
+  ctx.fill();
+
+  ctx.save();
+  leftFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Brick pattern
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 6; i++) {
+    const by = cy + i * 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - HW - 2, by);
+    ctx.lineTo(cx + 2, by + HH * 0.5);
+    ctx.stroke();
+  }
+  // Windows
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = '#a0d8f0';
+    ctx.fillRect(cx - HW + 3 + i * 9, cy + 4, 6, 8);
+    ctx.strokeStyle = '#b09060';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(cx - HW + 3 + i * 9, cy + 4, 6, 8);
+  }
+  ctx.restore();
+
+  // Right wall
+  rightFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#b09060';
+  ctx.fill();
+
+  ctx.save();
+  rightFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Door
+  ctx.fillStyle = '#6a4428';
+  ctx.fillRect(cx + 8, cy + HH + bh - 14, 10, 14);
+  ctx.strokeStyle = '#503018';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(cx + 8, cy + HH + bh - 14, 10, 14);
+  // Door window
+  ctx.fillStyle = '#a0d8f0';
+  ctx.fillRect(cx + 10, cy + HH + bh - 12, 6, 4);
+  // Clock/sign
+  ctx.fillStyle = '#f0e8c0';
+  ctx.fillRect(cx + 4, cy + HH + 2, 18, 5);
+  ctx.fillStyle = '#904030';
+  ctx.font = '3.5px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('SCHOOL', cx + 13, cy + HH + 5.5);
+  ctx.restore();
+
+  // Gabled roof like residential but different color
+  const peak = 10;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - peak);
+  ctx.lineTo(cx - HW - 2, cy + 1);
+  ctx.lineTo(cx, cy + HH + 1);
+  ctx.closePath();
+  ctx.fillStyle = '#904030';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - peak);
+  ctx.lineTo(cx + HW + 2, cy + 1);
+  ctx.lineTo(cx, cy + HH + 1);
+  ctx.closePath();
+  ctx.fillStyle = '#7a3020';
+  ctx.fill();
+
+  // Ridge
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - peak);
+  ctx.lineTo(cx, cy + HH + 1);
+  ctx.strokeStyle = '#a04030';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Bell tower
+  ctx.fillStyle = '#c8a070';
+  ctx.fillRect(cx - 3, cy - peak - 8, 6, 8);
+  ctx.fillStyle = '#b09060';
+  ctx.fillRect(cx - 4, cy - peak - 9, 8, 2);
+  // Bell
+  ctx.fillStyle = '#d4aa40';
+  ctx.beginPath();
+  ctx.arc(cx, cy - peak - 4, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ── Fire Station ────────────────────────────────────────────────
+
+function drawFireStation(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const bh = 20;
+
+  // Left wall - red
+  leftFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#c83030';
+  ctx.fill();
+
+  ctx.save();
+  leftFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Windows
+  for (let i = 0; i < 2; i++) {
+    ctx.fillStyle = '#a0d8f0';
+    ctx.fillRect(cx - HW + 4 + i * 12, cy + 3, 8, 5);
+    ctx.strokeStyle = '#a02020';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(cx - HW + 4 + i * 12, cy + 3, 8, 5);
+  }
+  // Stripe
+  ctx.fillStyle = '#ff6060';
+  ctx.fillRect(cx - HW, cy + bh - 2, HW + 4, 3);
+  ctx.restore();
+
+  // Right wall
+  rightFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#b02828';
+  ctx.fill();
+
+  ctx.save();
+  rightFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Garage door
+  ctx.fillStyle = '#e0d0b0';
+  ctx.fillRect(cx + 3, cy + HH + bh - 16, 20, 16);
+  ctx.strokeStyle = '#b0a080';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(cx + 3, cy + HH + bh - 16 + i * 4);
+    ctx.lineTo(cx + 23, cy + HH + bh - 16 + i * 4);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Flat roof
+  diamond(ctx, cx, cy, TW, TH);
+  ctx.fillStyle = '#cc3333';
+  ctx.fill();
+
+  // Siren on roof
+  ctx.fillStyle = '#ff4040';
+  ctx.beginPath();
+  ctx.arc(cx, cy - 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffaa00';
+  ctx.beginPath();
+  ctx.arc(cx, cy - 2, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tower
+  ctx.fillStyle = '#d04040';
+  ctx.fillRect(cx - HW * 0.3 - 2, cy - 14, 4, 14);
+  ctx.fillStyle = '#ff8080';
+  ctx.fillRect(cx - HW * 0.3 - 3, cy - 15, 6, 2);
+}
+
+// ── Police Station ──────────────────────────────────────────────
+
+function drawPolice(ctx: CanvasRenderingContext2D, cx: number, cy: number) {
+  const bh = 22;
+
+  // Left wall - blue
+  leftFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#4060a0';
+  ctx.fill();
+
+  ctx.save();
+  leftFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Windows
+  for (let i = 0; i < 2; i++) {
+    ctx.fillStyle = '#a0d8f0';
+    ctx.fillRect(cx - HW + 4 + i * 12, cy + 3, 8, 6);
+    ctx.strokeStyle = '#305080';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(cx - HW + 4 + i * 12, cy + 3, 8, 6);
+  }
+  // Badge/emblem
+  ctx.fillStyle = '#d4aa40';
+  ctx.beginPath();
+  ctx.arc(cx - HW + 14, cy + 15, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Right wall
+  rightFace(ctx, cx, cy, bh);
+  ctx.fillStyle = '#305080';
+  ctx.fill();
+
+  ctx.save();
+  rightFace(ctx, cx, cy, bh);
+  ctx.clip();
+  // Door
+  ctx.fillStyle = '#203860';
+  ctx.fillRect(cx + 8, cy + HH + bh - 14, 10, 14);
+  ctx.strokeStyle = '#102040';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(cx + 8, cy + HH + bh - 14, 10, 14);
+  // Sign
+  ctx.fillStyle = '#f0e8c0';
+  ctx.fillRect(cx + 3, cy + HH + 2, 20, 5);
+  ctx.fillStyle = '#305080';
+  ctx.font = '3px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('POLICE', cx + 13, cy + HH + 5.5);
+  ctx.restore();
+
+  // Flat roof
+  diamond(ctx, cx, cy, TW, TH);
+  ctx.fillStyle = '#3050a0';
+  ctx.fill();
+
+  // Police light
+  ctx.fillStyle = '#4080ff';
+  ctx.beginPath();
+  ctx.arc(cx - 4, cy - 2, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ff4040';
+  ctx.beginPath();
+  ctx.arc(cx + 4, cy - 2, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Flag pole
+  ctx.fillStyle = '#c0c0c0';
+  ctx.fillRect(cx + HW * 0.3, cy - 16, 1.5, 16);
+  ctx.fillStyle = '#3050a0';
+  ctx.fillRect(cx + HW * 0.3 + 1.5, cy - 16, 8, 5);
+}
+
 // ── Citizens ────────────────────────────────────────────────────
 
 function drawCitizen(ctx: CanvasRenderingContext2D, c: Citizen) {
@@ -558,7 +892,60 @@ function drawSmoke(ctx: CanvasRenderingContext2D, p: SmokeParticle) {
   ctx.fill();
 }
 
+// ── Day/Night overlay ───────────────────────────────────────────
+
+function getDayNightColor(dayTime: number): { r: number; g: number; b: number; a: number } {
+  // dayTime: 0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk
+  // Returns an overlay tint
+  if (dayTime < 0.2) {
+    // Night (midnight to pre-dawn)
+    return { r: 10, g: 15, b: 50, a: 0.35 };
+  } else if (dayTime < 0.3) {
+    // Dawn transition
+    const t = (dayTime - 0.2) / 0.1;
+    return {
+      r: Math.round(10 + t * 30),
+      g: Math.round(15 + t * 20),
+      b: Math.round(50 - t * 40),
+      a: 0.35 - t * 0.3,
+    };
+  } else if (dayTime < 0.7) {
+    // Day - minimal overlay
+    return { r: 0, g: 0, b: 0, a: 0.0 };
+  } else if (dayTime < 0.8) {
+    // Dusk transition
+    const t = (dayTime - 0.7) / 0.1;
+    return {
+      r: Math.round(40 * t),
+      g: Math.round(15 * t),
+      b: Math.round(10 * t),
+      a: t * 0.2,
+    };
+  } else {
+    // Night (dusk to midnight)
+    const t = (dayTime - 0.8) / 0.2;
+    return {
+      r: Math.round(40 - t * 30),
+      g: Math.round(15 - t * 0),
+      b: Math.round(10 + t * 40),
+      a: 0.2 + t * 0.15,
+    };
+  }
+}
+
+function getTimeOfDayLabel(dayTime: number): string {
+  if (dayTime < 0.2) return 'Night';
+  if (dayTime < 0.3) return 'Dawn';
+  if (dayTime < 0.7) return 'Day';
+  if (dayTime < 0.8) return 'Dusk';
+  return 'Night';
+}
+
+export { getTimeOfDayLabel };
+
 // ── Main render ─────────────────────────────────────────────────
+
+let _frameTick = 0;
 
 export function render(
   ctx: CanvasRenderingContext2D,
@@ -571,6 +958,7 @@ export function render(
   hoverR: number,
   hoverC: number,
 ) {
+  _frameTick++;
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
@@ -578,6 +966,7 @@ export function render(
   ctx.save();
   ctx.scale(dpr, dpr);
 
+  // Background gradient
   const grad = ctx.createLinearGradient(0, 0, 0, h);
   grad.addColorStop(0, '#1a2a1a');
   grad.addColorStop(0.5, '#1e321e');
@@ -597,7 +986,6 @@ export function render(
       const rc = sum - rr;
       if (rc < 0 || rc >= GRID) continue;
 
-      // rr, rc are rotated coords. Get real grid coords.
       const [gr, gc] = unrotateCoord(rr, rc, rotation);
 
       const sx = (rc - rr) * HW;
@@ -622,7 +1010,21 @@ export function render(
           case 'park': drawPark(ctx, 0, 0, gr * GRID + gc); break;
           case 'road': drawRoad(ctx, 0, 0); break;
           case 'power': drawPower(ctx, 0, 0); break;
+          case 'hospital': drawHospital(ctx, 0, 0); break;
+          case 'school': drawSchool(ctx, 0, 0); break;
+          case 'fire_station': drawFireStation(ctx, 0, 0); break;
+          case 'police': drawPolice(ctx, 0, 0); break;
         }
+
+        // Level stars
+        const bh = BUILDINGS[cell.type].height;
+        drawLevelStars(ctx, 0, -bh - 6, cell.level);
+
+        // Fire effect
+        if (cell.onFire) {
+          drawFireEffect(ctx, 0, 0, _frameTick);
+        }
+
         ctx.restore();
       }
 
@@ -630,7 +1032,6 @@ export function render(
       for (const cit of state.citizens) {
         const cr = Math.floor((cit.y / HH + cit.x / HW) / 2 + 0.5);
         const cc = Math.floor((cit.y / HH - cit.x / HW) / 2 + 0.5);
-        // cr, cc are in rotated space
         if (cr === rr && cc === rc) {
           drawCitizen(ctx, cit);
         }
@@ -642,5 +1043,13 @@ export function render(
     drawSmoke(ctx, p);
   }
 
+  // Reset transform before day/night overlay
   ctx.restore();
+
+  // Day/Night overlay
+  const dnColor = getDayNightColor(state.dayTime);
+  if (dnColor.a > 0.01) {
+    ctx.fillStyle = `rgba(${dnColor.r},${dnColor.g},${dnColor.b},${dnColor.a})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 }
