@@ -5,7 +5,7 @@ on:
     branches: [main, claude/*]
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -39,3 +39,11 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      # Fallback: also deploy to gh-pages branch
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        if: always()
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
