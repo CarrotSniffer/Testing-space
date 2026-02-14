@@ -1,6 +1,6 @@
 import {
   BuildingType, BUILDINGS, BUILD_ORDER, GameState, Building, GRID,
-  GameSpeed, Achievement, createAchievements, CATEGORY_LABELS, getUpgradeCost,
+  GameSpeed, Achievement, createAchievements, CATEGORY_LABELS, getUpgradeCost, Citizen,
 } from './types';
 import {
   createInitialState, gameTick, placeBuilding, upgradeBuilding,
@@ -12,7 +12,7 @@ import { createInputState, setupInput } from './input';
 
 // ── Save / Load ─────────────────────────────────────────────
 
-const SAVE_KEY = 'minicity_save_v2';
+const SAVE_KEY = 'minicity_save_v3';
 const TUTORIAL_KEY = 'minicity_tutorial_done';
 
 interface SaveData {
@@ -25,7 +25,10 @@ interface SaveData {
   dayTime: number;
   totalBuildings: number;
   totalMoneyEarned: number;
+  totalVisits: number;
   achievementsUnlocked: string[];
+  nextCitizenId: number;
+  citizens: Citizen[];
 }
 
 function saveGame(state: GameState) {
@@ -39,7 +42,10 @@ function saveGame(state: GameState) {
     dayTime: state.dayTime,
     totalBuildings: state.totalBuildings,
     totalMoneyEarned: state.totalMoneyEarned,
+    totalVisits: state.totalVisits,
     achievementsUnlocked: state.achievementsUnlocked,
+    nextCitizenId: state.nextCitizenId,
+    citizens: state.citizens,
   };
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -52,21 +58,35 @@ function loadGame(): GameState | null {
     if (!raw) return null;
     const data: SaveData = JSON.parse(raw);
     if (!data.grid || data.grid.length !== GRID) return null;
+
+    // Ensure grid buildings have new fields
+    for (const row of data.grid) {
+      for (const cell of row) {
+        if (cell.visitors === undefined) cell.visitors = 0;
+        if (cell.totalVisits === undefined) cell.totalVisits = 0;
+        if (cell.revenue === undefined) cell.revenue = 0;
+      }
+    }
+
     return {
       grid: data.grid,
       money: data.money ?? 1000,
       population: data.population ?? 0,
       happiness: data.happiness ?? 50,
       tick: data.tick ?? 0,
-      citizens: [],
+      citizens: data.citizens ?? [],
       smoke: [],
       speed: data.speed ?? 1,
       events: [],
       dayTime: data.dayTime ?? 0.35,
       totalBuildings: data.totalBuildings ?? 0,
       totalMoneyEarned: data.totalMoneyEarned ?? 0,
+      totalVisits: data.totalVisits ?? 0,
+      incomeThisCycle: 0,
+      upkeepThisCycle: 0,
       notifications: [],
       achievementsUnlocked: data.achievementsUnlocked ?? [],
+      nextCitizenId: data.nextCitizenId ?? 1,
     };
   } catch (_) {
     return null;
@@ -122,8 +142,8 @@ function showToast(msg: string, color?: string) {
 
 function updateHUD() {
   hudMoney.textContent = '$' + state.money.toLocaleString();
-  const income = calculateIncome(state.grid);
-  hudIncome.textContent = (income >= 0 ? '+' : '') + income + '/s';
+  const income = calculateIncome(state);
+  hudIncome.textContent = (income >= 0 ? '+' : '') + income + '/tick';
   hudIncome.style.color = income >= 0 ? '#4ade80' : '#f87171';
   hudPop.textContent = state.population.toLocaleString();
   hudHappy.textContent = state.happiness + '%';
@@ -250,6 +270,11 @@ function showBuildingInfo(r: number, c: number) {
   const upgradeCost = getUpgradeCost(cell.type, cell.level);
   const canAffordUpgrade = state.money >= upgradeCost;
 
+  const needLabels: Record<string, string> = {
+    shopping: 'Shopping', entertainment: 'Entertainment', work: 'Work',
+    health: 'Health', education: 'Education',
+  };
+
   let html = `
     <div class="info-header">
       <span class="info-icon">${TOOL_ICONS[cell.type]}</span>
@@ -259,11 +284,13 @@ function showBuildingInfo(r: number, c: number) {
       </div>
     </div>
     <div class="info-stats">
-      ${stats.income !== 0 ? `<div class="info-stat"><span>Income</span><span style="color:${stats.income >= 0 ? '#4ade80' : '#f87171'}">${stats.income >= 0 ? '+' : ''}$${stats.income}/s</span></div>` : ''}
-      ${stats.population !== 0 ? `<div class="info-stat"><span>Population</span><span style="color:#60a0ff">+${stats.population}</span></div>` : ''}
-      ${stats.happiness !== 0 ? `<div class="info-stat"><span>Happiness</span><span style="color:${stats.happiness >= 0 ? '#4ade80' : '#f87171'}">${stats.happiness >= 0 ? '+' : ''}${stats.happiness}</span></div>` : ''}
-      ${stats.adjacencyIncome !== 0 ? `<div class="info-stat adj"><span>Adj. Income</span><span style="color:#facc15">+$${stats.adjacencyIncome}/s</span></div>` : ''}
-      ${stats.adjacencyHappiness !== 0 ? `<div class="info-stat adj"><span>Adj. Happy</span><span style="color:${stats.adjacencyHappiness >= 0 ? '#facc15' : '#f87171'}">${stats.adjacencyHappiness >= 0 ? '+' : ''}${stats.adjacencyHappiness}</span></div>` : ''}
+      ${stats.capacity > 0 ? `<div class="info-stat"><span>Visitors</span><span style="color:#60a0ff">${stats.visitors}/${stats.capacity}</span></div>` : ''}
+      ${stats.revenuePerVisit > 0 ? `<div class="info-stat"><span>Revenue/Visit</span><span style="color:#4ade80">+$${stats.revenuePerVisit}</span></div>` : ''}
+      ${stats.upkeep > 0 ? `<div class="info-stat"><span>Upkeep/Tick</span><span style="color:#f87171">-$${stats.upkeep}</span></div>` : ''}
+      ${stats.happinessEffect !== 0 ? `<div class="info-stat"><span>Happiness</span><span style="color:${stats.happinessEffect >= 0 ? '#4ade80' : '#f87171'}">${stats.happinessEffect >= 0 ? '+' : ''}${stats.happinessEffect}</span></div>` : ''}
+      ${stats.needFulfilled ? `<div class="info-stat"><span>Fulfills</span><span style="color:#facc15">${needLabels[stats.needFulfilled] || stats.needFulfilled}</span></div>` : ''}
+      ${info.popCapacity > 0 ? `<div class="info-stat"><span>Housing</span><span style="color:#60a0ff">${Math.floor(info.popCapacity * (1 + (cell.level - 1) * 0.5))} citizens</span></div>` : ''}
+      <div class="info-stat"><span>Total Visits</span><span style="color:#888">${stats.totalVisits}</span></div>
     </div>
     ${cell.onFire ? '<div class="info-fire">ON FIRE! Waiting for fire to end...</div>' : ''}
     ${upgradeAvailable ? `
@@ -315,7 +342,7 @@ const statsClose = document.getElementById('stats-close')!;
 
 function updateStatsPanel() {
   const ct = countBuildings(state.grid);
-  const income = calculateIncome(state.grid);
+  const income = calculateIncome(state);
 
   // Power info
   const totalPowerable = Object.entries(ct).reduce((sum, [k, v]) =>
@@ -326,13 +353,16 @@ function updateStatsPanel() {
     <div class="stats-section">
       <div class="stats-title">Economy</div>
       <div class="stats-row"><span>Balance</span><span>$${state.money.toLocaleString()}</span></div>
-      <div class="stats-row"><span>Income/tick</span><span style="color:${income >= 0 ? '#4ade80' : '#f87171'}">${income >= 0 ? '+' : ''}$${income}</span></div>
+      <div class="stats-row"><span>Revenue/tick</span><span style="color:#4ade80">+$${state.incomeThisCycle}</span></div>
+      <div class="stats-row"><span>Upkeep/tick</span><span style="color:#f87171">-$${state.upkeepThisCycle}</span></div>
+      <div class="stats-row"><span>Net Income</span><span style="color:${income >= 0 ? '#4ade80' : '#f87171'}">${income >= 0 ? '+' : ''}$${income}</span></div>
       <div class="stats-row"><span>Total Earned</span><span>$${state.totalMoneyEarned.toLocaleString()}</span></div>
     </div>
     <div class="stats-section">
       <div class="stats-title">Population</div>
       <div class="stats-row"><span>Citizens</span><span>${state.population}</span></div>
       <div class="stats-row"><span>Happiness</span><span>${state.happiness}%</span></div>
+      <div class="stats-row"><span>Total Visits</span><span>${state.totalVisits.toLocaleString()}</span></div>
     </div>
     <div class="stats-section">
       <div class="stats-title">Infrastructure</div>
@@ -471,12 +501,12 @@ const tutorialOverlay = document.getElementById('tutorial')!;
 const tutorialDone = localStorage.getItem(TUTORIAL_KEY);
 let tutorialStep = 0;
 const tutorialSteps = [
-  { text: 'Welcome to MiniCity! Build and manage your own isometric city.', target: '' },
-  { text: 'Select buildings from the toolbar below. Start with a House to get population.', target: 'toolbar' },
-  { text: 'Tap on the grid to place buildings. Watch your money and income!', target: 'game' },
-  { text: 'Use the stats panel to track your city, and upgrade buildings by inspecting them.', target: 'stats-btn' },
-  { text: 'Build Fire Stations to prevent disasters, Schools for income bonuses, and Hospitals for population growth.', target: '' },
-  { text: 'Place buildings strategically - adjacency bonuses reward good planning!', target: '' },
+  { text: 'Welcome to MiniCity! Build and manage your own isometric city with a living economy.', target: '' },
+  { text: 'Start by building Houses to attract citizens. Each house provides homes for 4 people.', target: 'toolbar' },
+  { text: 'Citizens have needs: shopping, work, entertainment, health, and education. Build Shops, Factories, Parks, Hospitals, and Schools to fulfill them.', target: 'game' },
+  { text: 'Money is earned when citizens visit your buildings. No visitors = no income! Watch the visitor badges on buildings.', target: '' },
+  { text: 'Use the stats panel to track revenue, upkeep, and visits. Upgrade buildings to increase capacity and earnings.', target: 'stats-btn' },
+  { text: 'Build Fire Stations to prevent disasters, Schools for revenue bonuses, and keep citizens happy for a thriving city!', target: '' },
 ];
 
 function showTutorial() {

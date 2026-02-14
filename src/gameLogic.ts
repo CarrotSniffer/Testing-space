@@ -2,15 +2,18 @@ import {
   GameState, Building, BuildingType, BUILDINGS, GRID,
   Citizen, SmokeParticle, HW, HH, randomCitizenColor,
   getLevelMultiplier, GameEvent, Notification, getUpgradeCost,
+  CitizenNeeds,
 } from './types';
 import { gridToScreen } from './renderer';
+
+// ── Initial state ────────────────────────────────────────────
 
 export function createInitialState(): GameState {
   const grid: Building[][] = [];
   for (let r = 0; r < GRID; r++) {
     const row: Building[] = [];
     for (let c = 0; c < GRID; c++) {
-      row.push({ type: 'empty', level: 1 });
+      row.push({ type: 'empty', level: 1, visitors: 0, totalVisits: 0, revenue: 0 });
     }
     grid.push(row);
   }
@@ -18,11 +21,12 @@ export function createInitialState(): GameState {
     grid, money: 1000, population: 0, happiness: 50, tick: 0,
     citizens: [], smoke: [], speed: 1, events: [],
     dayTime: 0.35, totalBuildings: 0, totalMoneyEarned: 0,
-    notifications: [], achievementsUnlocked: [],
+    totalVisits: 0, incomeThisCycle: 0, upkeepThisCycle: 0,
+    notifications: [], achievementsUnlocked: [], nextCitizenId: 1,
   };
 }
 
-// ── Counting helpers ────────────────────────────────────────
+// ── Counting helpers ─────────────────────────────────────────
 
 export function countBuildings(grid: Building[][]): Record<BuildingType, number> {
   const c: Record<string, number> = {
@@ -40,201 +44,152 @@ function countTotalNonEmpty(grid: Building[][]): number {
   return c;
 }
 
-// ── Adjacency ──────────────────────────────────────────────
+// ── Population capacity ──────────────────────────────────────
 
-function getNeighborTypes(grid: Building[][], r: number, c: number): BuildingType[] {
-  const types: BuildingType[] = [];
-  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  for (const [dr, dc] of dirs) {
-    const nr = r + dr, nc = c + dc;
-    if (nr >= 0 && nr < GRID && nc >= 0 && nc < GRID) {
-      types.push(grid[nr][nc].type);
-    }
-  }
-  return types;
-}
-
-export function calculateAdjacencyBonus(grid: Building[][], r: number, c: number): { income: number; happiness: number } {
-  const cell = grid[r][c];
-  const neighbors = getNeighborTypes(grid, r, c);
-  let income = 0;
-  let happiness = 0;
-
-  switch (cell.type) {
-    case 'residential':
-      if (neighbors.includes('park')) happiness += 3;
-      if (neighbors.includes('industrial')) happiness -= 2;
-      if (neighbors.includes('hospital')) happiness += 2;
-      if (neighbors.includes('police')) happiness += 1;
-      break;
-    case 'commercial':
-      if (neighbors.includes('road')) income += 3;
-      if (neighbors.includes('residential')) income += 2;
-      break;
-    case 'industrial':
-      if (neighbors.includes('road')) income += 4;
-      if (neighbors.includes('residential')) happiness -= 1;
-      break;
-    case 'park':
-      // Parks near residential boost extra
-      if (neighbors.includes('residential')) happiness += 2;
-      break;
-  }
-
-  return { income, happiness };
-}
-
-// ── Economy ─────────────────────────────────────────────────
-
-export function calculateIncome(grid: Building[][]): number {
-  const ct = countBuildings(grid);
-  let income = 0;
-
-  // Base income from buildings with level multipliers
-  for (let r = 0; r < GRID; r++) {
-    for (let c = 0; c < GRID; c++) {
-      const cell = grid[r][c];
-      if (cell.type === 'empty') continue;
-      const info = BUILDINGS[cell.type];
-      const lvlMul = getLevelMultiplier(cell.level);
-      const adj = calculateAdjacencyBonus(grid, r, c);
-
-      if (cell.type === 'commercial') {
-        const popMul = Math.min(2, 1 + ct.residential * 0.1);
-        income += info.incomeEffect * lvlMul * popMul + adj.income;
-      } else {
-        income += info.incomeEffect * lvlMul + adj.income;
-      }
-    }
-  }
-
-  // School bonus: +10% income per school
-  const schoolBonus = 1 + ct.school * 0.1;
-  income *= schoolBonus;
-
-  return Math.round(income);
-}
-
-export function calculatePopulation(grid: Building[][]): number {
-  const ct = countBuildings(grid);
-  let basePop = 0;
-
-  // Sum population from buildings with level multipliers
+function getPopulationCapacity(grid: Building[][]): number {
+  let cap = 0;
   for (const row of grid) {
     for (const cell of row) {
-      if (cell.type !== 'empty') {
-        const lvlMul = getLevelMultiplier(cell.level);
-        basePop += BUILDINGS[cell.type].popEffect * lvlMul;
+      if (cell.type === 'residential') {
+        cap += BUILDINGS.residential.popCapacity * getLevelMultiplier(cell.level);
       }
     }
   }
-
-  const commBonus = ct.commercial * 3;
-  const total = countTotalNonEmpty(grid) - ct.road;
-  const powered = ct.power * 20 * (1 + (ct.power > 0 ? 0 : 0)); // power plants power 20 each
-  const ratio = total > 0 ? Math.min(1, powered / total) : 1;
-
-  // Hospital bonus: +15% pop cap per hospital
-  const hospitalMul = 1 + ct.hospital * 0.15;
-
-  return Math.round((basePop + commBonus) * ratio * hospitalMul);
+  return Math.floor(cap);
 }
 
-export function calculateHappiness(grid: Building[][]): number {
-  const ct = countBuildings(grid);
-  let h = 50;
+// ── Citizen AI ───────────────────────────────────────────────
 
-  // Base effects with level multipliers
+function createCitizen(id: number, homeR: number, homeC: number): Citizen {
+  const [hx, hy] = gridToScreen(homeR, homeC);
+  return {
+    id,
+    x: hx + (Math.random() - 0.5) * HW * 0.6,
+    y: hy + HH + (Math.random() - 0.5) * HH * 0.4,
+    tx: hx, ty: hy + HH,
+    color: randomCitizenColor(),
+    speed: 0.3 + Math.random() * 0.4,
+    state: 'idle',
+    homeR, homeC,
+    targetR: -1, targetC: -1,
+    targetType: null,
+    needs: {
+      shopping: 20 + Math.random() * 30,
+      entertainment: 10 + Math.random() * 20,
+      work: 30 + Math.random() * 20,
+      health: 0,
+      education: 5 + Math.random() * 15,
+    },
+    satisfaction: 70,
+    visitTimer: 0,
+    wallet: 50,
+  };
+}
+
+function getHighestNeed(needs: CitizenNeeds): { need: keyof CitizenNeeds; value: number } {
+  let highest: keyof CitizenNeeds = 'shopping';
+  let highestVal = 0;
+  for (const key of Object.keys(needs) as (keyof CitizenNeeds)[]) {
+    if (needs[key] > highestVal) {
+      highestVal = needs[key];
+      highest = key;
+    }
+  }
+  return { need: highest, value: highestVal };
+}
+
+function findBuildingForNeed(
+  grid: Building[][], need: keyof CitizenNeeds,
+): [number, number] | null {
+  const candidates: [number, number][] = [];
   for (let r = 0; r < GRID; r++) {
     for (let c = 0; c < GRID; c++) {
       const cell = grid[r][c];
       if (cell.type === 'empty') continue;
       const info = BUILDINGS[cell.type];
-      const lvlMul = getLevelMultiplier(cell.level);
-      const adj = calculateAdjacencyBonus(grid, r, c);
-      h += info.happinessEffect * lvlMul + adj.happiness;
-
-      // Fire penalty
-      if (cell.onFire) h -= 5;
+      if (info.needFulfilled === need) {
+        const cap = Math.floor(info.capacity * getLevelMultiplier(cell.level));
+        if (cell.visitors < cap) {
+          candidates.push([r, c]);
+        }
+      }
     }
   }
-
-  // Diversity bonus
-  if (ct.residential > 0 && ct.commercial > 0 && ct.industrial > 0) h += 10;
-
-  // Police reduce crime effect (general boost when you have police)
-  if (ct.police > 0) h += ct.police * 2;
-
-  return Math.max(0, Math.min(100, Math.round(h)));
-}
-
-// ── Citizens ────────────────────────────────────────────────
-
-function findTilesOfType(grid: Building[][], types: BuildingType[]): [number, number][] {
-  const tiles: [number, number][] = [];
-  for (let r = 0; r < GRID; r++) {
-    for (let c = 0; c < GRID; c++) {
-      if (types.includes(grid[r][c].type)) tiles.push([r, c]);
-    }
-  }
-  return tiles;
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 function randomNearTile(r: number, c: number): [number, number] {
   const [sx, sy] = gridToScreen(r, c);
   return [
-    sx + (Math.random() - 0.5) * HW * 1.2,
-    sy + HH + (Math.random() - 0.5) * HH * 0.8,
+    sx + (Math.random() - 0.5) * HW * 0.8,
+    sy + HH + (Math.random() - 0.5) * HH * 0.5,
   ];
 }
 
-function spawnCitizens(state: GameState): Citizen[] {
-  const citizens = [...state.citizens];
-  const homes = findTilesOfType(state.grid, ['residential']);
-  const destinations = findTilesOfType(state.grid, [
-    'commercial', 'industrial', 'park', 'road', 'hospital', 'school', 'police',
-  ]);
-
-  const target = Math.min(homes.length * 2, 40);
-
-  while (citizens.length < target && homes.length > 0) {
-    const home = homes[Math.floor(Math.random() * homes.length)];
-    const [x, y] = randomNearTile(home[0], home[1]);
-
-    let tx = x, ty = y;
-    if (destinations.length > 0) {
-      const dest = destinations[Math.floor(Math.random() * destinations.length)];
-      [tx, ty] = randomNearTile(dest[0], dest[1]);
-    }
-
-    citizens.push({
-      x, y, tx, ty,
-      color: randomCitizenColor(),
-      speed: 0.3 + Math.random() * 0.4,
-    });
-  }
-
-  while (citizens.length > target) citizens.pop();
-  return citizens;
+function tickCitizenNeeds(citizen: Citizen): CitizenNeeds {
+  return {
+    shopping: Math.min(100, citizen.needs.shopping + 2 + Math.random() * 1.5),
+    entertainment: Math.min(100, citizen.needs.entertainment + 1.5 + Math.random()),
+    work: Math.min(100, citizen.needs.work + 2.5 + Math.random()),
+    health: Math.min(100, citizen.needs.health + 0.3 + Math.random() * 0.3),
+    education: Math.min(100, citizen.needs.education + 0.8 + Math.random() * 0.5),
+  };
 }
 
-export function updateCitizens(state: GameState, dt: number): Citizen[] {
-  const destinations = findTilesOfType(state.grid, [
-    'commercial', 'industrial', 'park', 'road', 'residential', 'hospital', 'school',
-  ]);
+// Decision threshold - citizens only seek buildings when need is above this
+const NEED_THRESHOLD = 40;
 
-  return state.citizens.map((c) => {
+function citizenDecide(citizen: Citizen, grid: Building[][]): Citizen {
+  // Idle citizens check their needs and find somewhere to go
+  const { need, value } = getHighestNeed(citizen.needs);
+
+  if (value < NEED_THRESHOLD) {
+    // No pressing need, just wander near home
+    if (Math.random() < 0.3) {
+      const [tx, ty] = randomNearTile(citizen.homeR, citizen.homeC);
+      return { ...citizen, tx, ty };
+    }
+    return citizen;
+  }
+
+  // Find a building that can fulfill this need
+  const target = findBuildingForNeed(grid, need);
+  if (!target) {
+    // No building available - satisfaction drops
+    const sat = Math.max(0, citizen.satisfaction - 2);
+    return { ...citizen, satisfaction: sat };
+  }
+
+  const [tr, tc] = target;
+  const [tx, ty] = randomNearTile(tr, tc);
+
+  return {
+    ...citizen,
+    state: 'walking',
+    targetR: tr,
+    targetC: tc,
+    targetType: grid[tr][tc].type,
+    tx, ty,
+  };
+}
+
+// ── Citizen movement (per-frame, smooth) ─────────────────────
+
+export function updateCitizens(state: GameState, dt: number): Citizen[] {
+  return state.citizens.map(c => {
+    if (c.state === 'visiting') return c; // Don't move while visiting
+
     const dx = c.tx - c.x;
     const dy = c.ty - c.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 2) {
-      if (destinations.length > 0) {
-        const dest = destinations[Math.floor(Math.random() * destinations.length)];
-        const [tx, ty] = randomNearTile(dest[0], dest[1]);
-        return { ...c, tx, ty };
+      // Arrived at destination
+      if (c.state === 'returning') {
+        return { ...c, state: 'idle', x: c.tx, y: c.ty };
       }
-      return c;
+      return { ...c, x: c.tx, y: c.ty };
     }
 
     const speed = c.speed * dt * 0.06;
@@ -246,38 +201,233 @@ export function updateCitizens(state: GameState, dt: number): Citizen[] {
   });
 }
 
-// ── Smoke ───────────────────────────────────────────────────
+// ── Citizen tick logic (per game tick, not per frame) ─────────
 
-function spawnSmoke(state: GameState): SmokeParticle[] {
-  const smoke = [...state.smoke];
-  const factories = findTilesOfType(state.grid, ['industrial']);
+function tickCitizens(state: GameState): {
+  citizens: Citizen[];
+  grid: Building[][];
+  visitRevenue: number;
+  visitCount: number;
+} {
+  const grid = state.grid.map(r => r.map(c => ({ ...c })));
+  let visitRevenue = 0;
+  let visitCount = 0;
 
-  for (const [r, c] of factories) {
-    if (Math.random() < 0.6) {
-      const [sx, sy] = gridToScreen(r, c);
-      const stack = Math.random() > 0.5 ? -8 : 6;
-      smoke.push({
-        x: sx + stack + (Math.random() - 0.5) * 3,
-        y: sy - 14 + (Math.random() - 0.5) * 2,
-        age: 0,
-        maxAge: 60 + Math.random() * 40,
-        vx: (Math.random() - 0.3) * 0.3,
-        vy: -0.4 - Math.random() * 0.3,
-        size: 3 + Math.random() * 3,
-      });
+  // Reset visitor counts each tick (recalculated below)
+  for (const row of grid) for (const cell of row) cell.visitors = 0;
+
+  const citizens = state.citizens.map(citizen => {
+    let c = { ...citizen, needs: { ...citizen.needs } };
+
+    // Increase needs over time
+    c.needs = tickCitizenNeeds(c);
+
+    switch (c.state) {
+      case 'idle':
+        c = citizenDecide(c, grid);
+        break;
+
+      case 'walking': {
+        // Check if arrived at target building
+        const dx = c.tx - c.x;
+        const dy = c.ty - c.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 4 && c.targetR >= 0 && c.targetC >= 0) {
+          const building = grid[c.targetR][c.targetC];
+          const info = BUILDINGS[building.type];
+          const cap = Math.floor(info.capacity * getLevelMultiplier(building.level));
+
+          if (building.visitors < cap && info.needFulfilled) {
+            // Enter building
+            building.visitors++;
+            c.state = 'visiting';
+            c.visitTimer = info.visitDuration;
+          } else {
+            // Building full or changed, go home
+            const [tx, ty] = randomNearTile(c.homeR, c.homeC);
+            c = { ...c, state: 'returning', tx, ty, targetR: -1, targetC: -1, targetType: null };
+            c.satisfaction = Math.max(0, c.satisfaction - 5);
+          }
+        }
+        break;
+      }
+
+      case 'visiting': {
+        c.visitTimer--;
+        if (c.targetR >= 0 && c.targetC >= 0) {
+          grid[c.targetR][c.targetC].visitors++;
+        }
+
+        if (c.visitTimer <= 0) {
+          // Visit complete!
+          if (c.targetR >= 0 && c.targetC >= 0) {
+            const building = grid[c.targetR][c.targetC];
+            const info = BUILDINGS[building.type];
+            const lvlMul = getLevelMultiplier(building.level);
+
+            // Fulfill need
+            if (info.needFulfilled) {
+              c.needs[info.needFulfilled] = Math.max(0,
+                c.needs[info.needFulfilled] - info.fulfillAmount * lvlMul
+              );
+            }
+
+            // Generate revenue
+            const rev = Math.round(info.revenuePerVisit * lvlMul);
+            visitRevenue += rev;
+            building.revenue += rev;
+            building.totalVisits++;
+            visitCount++;
+
+            // Boost satisfaction
+            c.satisfaction = Math.min(100, c.satisfaction + 8);
+          }
+
+          // Head home
+          const [tx, ty] = randomNearTile(c.homeR, c.homeC);
+          c = { ...c, state: 'returning', tx, ty, targetR: -1, targetC: -1, targetType: null };
+        }
+        break;
+      }
+
+      case 'returning': {
+        const dx = c.tx - c.x;
+        const dy = c.ty - c.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 4) {
+          c.state = 'idle';
+        }
+        break;
+      }
+    }
+
+    return c;
+  });
+
+  return { citizens, grid, visitRevenue, visitCount };
+}
+
+// ── Spawn / remove citizens based on housing ─────────────────
+
+function managePopulation(state: GameState): { citizens: Citizen[]; nextId: number } {
+  const popCap = getPopulationCapacity(state.grid);
+  let citizens = [...state.citizens];
+  let nextId = state.nextCitizenId;
+
+  // Find all residential tiles
+  const homes: [number, number][] = [];
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      if (state.grid[r][c].type === 'residential') homes.push([r, c]);
     }
   }
 
-  // Fire smoke (red-tinted, from burning buildings)
+  // Spawn new citizens if under cap (max 2 per tick to feel organic)
+  let spawned = 0;
+  while (citizens.length < popCap && homes.length > 0 && spawned < 2) {
+    const home = homes[Math.floor(Math.random() * homes.length)];
+    citizens.push(createCitizen(nextId++, home[0], home[1]));
+    spawned++;
+  }
+
+  // Remove citizens if over cap (when housing demolished)
+  while (citizens.length > popCap && citizens.length > 0) {
+    // Remove idle citizens first
+    const idleIdx = citizens.findIndex(c => c.state === 'idle');
+    if (idleIdx >= 0) {
+      citizens.splice(idleIdx, 1);
+    } else {
+      citizens.pop();
+    }
+  }
+
+  // Remove citizens whose homes no longer exist
+  citizens = citizens.filter(c => {
+    return state.grid[c.homeR]?.[c.homeC]?.type === 'residential';
+  });
+
+  return { citizens, nextId };
+}
+
+// ── Happiness calculation ────────────────────────────────────
+
+function calculateHappiness(state: GameState): number {
+  // Base: average citizen satisfaction
+  let avgSat = 50;
+  if (state.citizens.length > 0) {
+    avgSat = state.citizens.reduce((sum, c) => sum + c.satisfaction, 0) / state.citizens.length;
+  }
+
+  // Building effects (passive bonuses from parks, services, etc.)
+  let buildingBonus = 0;
+  const ct = countBuildings(state.grid);
   for (let r = 0; r < GRID; r++) {
     for (let c = 0; c < GRID; c++) {
-      if (state.grid[r][c].onFire && Math.random() < 0.4) {
+      const cell = state.grid[r][c];
+      if (cell.type === 'empty') continue;
+      buildingBonus += BUILDINGS[cell.type].happinessEffect * getLevelMultiplier(cell.level) * 0.5;
+      if (cell.onFire) buildingBonus -= 5;
+    }
+  }
+
+  // Diversity bonus
+  if (ct.residential > 0 && ct.commercial > 0 && ct.industrial > 0) buildingBonus += 5;
+  if (ct.police > 0) buildingBonus += ct.police * 2;
+
+  // Combine: 70% citizen satisfaction + 30% building bonuses
+  const combined = avgSat * 0.7 + (50 + buildingBonus) * 0.3;
+  return Math.max(0, Math.min(100, Math.round(combined)));
+}
+
+// ── Upkeep calculation ───────────────────────────────────────
+
+function calculateUpkeep(grid: Building[][]): number {
+  let upkeep = 0;
+  for (const row of grid) {
+    for (const cell of row) {
+      if (cell.type === 'empty') continue;
+      upkeep += BUILDINGS[cell.type].upkeepPerTick * getLevelMultiplier(cell.level);
+    }
+  }
+  return Math.round(upkeep);
+}
+
+// ── Income calculation (for HUD display) ─────────────────────
+
+export function calculateIncome(state: GameState): number {
+  return state.incomeThisCycle - state.upkeepThisCycle;
+}
+
+// ── Smoke ────────────────────────────────────────────────────
+
+function spawnSmoke(state: GameState): SmokeParticle[] {
+  const smoke = [...state.smoke];
+
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      const cell = state.grid[r][c];
+
+      // Factory smoke (more smoke when visitors/workers inside)
+      if (cell.type === 'industrial' && Math.random() < 0.4 + cell.visitors * 0.1) {
+        const [sx, sy] = gridToScreen(r, c);
+        const stack = Math.random() > 0.5 ? -8 : 6;
+        smoke.push({
+          x: sx + stack + (Math.random() - 0.5) * 3,
+          y: sy - 14 + (Math.random() - 0.5) * 2,
+          age: 0, maxAge: 60 + Math.random() * 40,
+          vx: (Math.random() - 0.3) * 0.3,
+          vy: -0.4 - Math.random() * 0.3,
+          size: 3 + Math.random() * 3,
+        });
+      }
+
+      // Fire smoke
+      if (cell.onFire && Math.random() < 0.4) {
         const [sx, sy] = gridToScreen(r, c);
         smoke.push({
           x: sx + (Math.random() - 0.5) * 10,
           y: sy - 5 + (Math.random() - 0.5) * 5,
-          age: 0,
-          maxAge: 40 + Math.random() * 30,
+          age: 0, maxAge: 40 + Math.random() * 30,
           vx: (Math.random() - 0.5) * 0.5,
           vy: -0.6 - Math.random() * 0.4,
           size: 4 + Math.random() * 4,
@@ -285,73 +435,45 @@ function spawnSmoke(state: GameState): SmokeParticle[] {
       }
     }
   }
-
   return smoke;
 }
 
 export function updateSmoke(smoke: SmokeParticle[], dt: number): SmokeParticle[] {
   return smoke
-    .map((p) => ({
+    .map(p => ({
       ...p,
       x: p.x + p.vx * dt * 0.06,
       y: p.y + p.vy * dt * 0.06,
       age: p.age + dt * 0.06,
     }))
-    .filter((p) => p.age < p.maxAge);
+    .filter(p => p.age < p.maxAge);
 }
 
-// ── Random Events ──────────────────────────────────────────
+// ── Random Events ────────────────────────────────────────────
 
 function trySpawnEvent(state: GameState): GameEvent | null {
   const ct = countBuildings(state.grid);
   const totalBuildings = countTotalNonEmpty(state.grid);
-  if (totalBuildings < 5) return null; // Need at least 5 buildings for events
-  if (state.events.length >= 2) return null; // Max 2 concurrent events
-  if (Math.random() > 0.08) return null; // ~8% chance per tick
+  if (totalBuildings < 5) return null;
+  if (state.events.length >= 2) return null;
+  if (Math.random() > 0.08) return null;
 
   const roll = Math.random();
-
   if (roll < 0.2 && ct.fire_station === 0 && totalBuildings > 3) {
-    return {
-      type: 'fire', label: 'Fire!',
-      description: 'A building caught fire!',
-      duration: 8,
-      effect: {},
-    };
+    return { type: 'fire', label: 'Fire!', description: 'A building caught fire!', duration: 8, effect: {} };
   } else if (roll < 0.45) {
-    return {
-      type: 'boom', label: 'Economic Boom',
-      description: 'Trade is thriving! +50% income',
-      duration: 15,
-      effect: { incomeMult: 1.5 },
-    };
+    return { type: 'boom', label: 'Economic Boom', description: 'Visitors spending more! +50% revenue', duration: 15, effect: { incomeMult: 1.5 } };
   } else if (roll < 0.65) {
-    return {
-      type: 'storm', label: 'Storm',
-      description: 'Bad weather! -10 happiness',
-      duration: 10,
-      effect: { happinessAdd: -10 },
-    };
+    return { type: 'storm', label: 'Storm', description: 'Bad weather! Citizens stay home', duration: 10, effect: { happinessAdd: -10 } };
   } else if (roll < 0.85) {
-    return {
-      type: 'festival', label: 'Festival!',
-      description: 'Citizens celebrate! +12 happiness',
-      duration: 12,
-      effect: { happinessAdd: 12 },
-    };
+    return { type: 'festival', label: 'Festival!', description: 'Citizens celebrate! More visits', duration: 12, effect: { happinessAdd: 12 } };
   } else {
-    return {
-      type: 'population_surge', label: 'Population Surge',
-      description: 'New residents arrive! +20 pop',
-      duration: 10,
-      effect: { popAdd: 20 },
-    };
+    return { type: 'population_surge', label: 'Population Surge', description: 'New residents!', duration: 10, effect: { popAdd: 20 } };
   }
 }
 
 function applyFireEvent(state: GameState): GameState {
   const grid = state.grid.map(r => r.map(c => ({ ...c })));
-  // Find a non-empty, non-fire building to set on fire
   const candidates: [number, number][] = [];
   for (let r = 0; r < GRID; r++) {
     for (let c = 0; c < GRID; c++) {
@@ -377,10 +499,7 @@ function tickFireTimers(state: GameState): GameState {
         if (grid[r][c].fireTimer! <= 0) {
           grid[r][c].onFire = false;
           grid[r][c].fireTimer = undefined;
-          // Building damaged - reduce level
-          if (grid[r][c].level > 1) {
-            grid[r][c].level--;
-          }
+          if (grid[r][c].level > 1) grid[r][c].level--;
         }
       }
     }
@@ -388,17 +507,16 @@ function tickFireTimers(state: GameState): GameState {
   return { ...state, grid };
 }
 
-// ── Day/Night Cycle ─────────────────────────────────────────
+// ── Day/Night ────────────────────────────────────────────────
 
 function advanceDayTime(dayTime: number): number {
-  // Full cycle every ~120 ticks (240 seconds = 4 minutes)
   return (dayTime + 1 / 120) % 1;
 }
 
-// ── Game tick (called every 2s at 1x speed) ─────────────────
+// ── Game tick ────────────────────────────────────────────────
 
 export function gameTick(state: GameState): GameState {
-  if (state.speed === 0) return state; // Paused
+  if (state.speed === 0) return state;
 
   let newState = { ...state };
 
@@ -408,25 +526,37 @@ export function gameTick(state: GameState): GameState {
   // Tick fire timers
   newState = tickFireTimers(newState);
 
-  // Calculate base stats
-  const income = calculateIncome(newState.grid);
-  const population = calculatePopulation(newState.grid);
-  let happiness = calculateHappiness(newState.grid);
+  // Manage population (spawn/remove citizens based on housing)
+  const { citizens: managedCitizens, nextId } = managePopulation(newState);
+  newState.citizens = managedCitizens;
+  newState.nextCitizenId = nextId;
 
-  // Process active events
+  // Tick citizen AI - this is where visits happen and revenue is generated
+  const citizenResult = tickCitizens(newState);
+  newState.citizens = citizenResult.citizens;
+  newState.grid = citizenResult.grid;
+
+  // Reset building revenue counters periodically
+  // (revenue accumulates for display, reset each tick)
+  for (const row of newState.grid) {
+    for (const cell of row) {
+      cell.revenue = 0;
+    }
+  }
+
+  // Calculate upkeep
+  const upkeep = calculateUpkeep(newState.grid);
+
+  // Process events
   let eventIncomeMult = 1;
   let eventHappinessAdd = 0;
-  let eventPopAdd = 0;
   const activeEvents: GameEvent[] = [];
 
   for (const evt of newState.events) {
     const remaining = { ...evt, duration: evt.duration - 1 };
-    if (remaining.duration > 0) {
-      activeEvents.push(remaining);
-    }
+    if (remaining.duration > 0) activeEvents.push(remaining);
     if (evt.effect.incomeMult) eventIncomeMult *= evt.effect.incomeMult;
     if (evt.effect.happinessAdd) eventHappinessAdd += evt.effect.happinessAdd;
-    if (evt.effect.popAdd) eventPopAdd += evt.effect.popAdd;
   }
 
   // Try spawn new event
@@ -445,33 +575,39 @@ export function gameTick(state: GameState): GameState {
     }
   }
 
-  // Apply happiness modifier
+  // School bonus to revenue
+  const ct = countBuildings(newState.grid);
+  const schoolBonus = 1 + ct.school * 0.1;
+
+  // Final revenue = visitor revenue * event mult * school bonus
+  const tickRevenue = Math.round(citizenResult.visitRevenue * eventIncomeMult * schoolBonus);
+  const netIncome = tickRevenue - upkeep;
+
+  // Calculate happiness (based on citizen satisfaction + building effects)
+  let happiness = calculateHappiness(newState);
   happiness = Math.max(0, Math.min(100, happiness + eventHappinessAdd));
-  const hMul = happiness >= 50 ? 1 + (happiness - 50) / 200 : happiness / 50;
-  const finalIncome = Math.round(income * hMul * eventIncomeMult);
 
-  const citizens = spawnCitizens(newState);
   const smoke = spawnSmoke(newState);
-
-  // Trim old notifications (keep last 20)
   while (notifications.length > 20) notifications.shift();
 
   return {
     ...newState,
-    money: newState.money + finalIncome,
-    population: population + eventPopAdd,
+    money: newState.money + netIncome,
+    population: newState.citizens.length,
     happiness,
     tick: newState.tick + 1,
-    citizens,
     smoke,
     events: activeEvents,
     totalBuildings: countTotalNonEmpty(newState.grid),
-    totalMoneyEarned: newState.totalMoneyEarned + Math.max(0, finalIncome),
+    totalMoneyEarned: newState.totalMoneyEarned + Math.max(0, tickRevenue),
+    totalVisits: newState.totalVisits + citizenResult.visitCount,
+    incomeThisCycle: tickRevenue,
+    upkeepThisCycle: upkeep,
     notifications,
   };
 }
 
-// ── Place building ──────────────────────────────────────────
+// ── Place building ───────────────────────────────────────────
 
 export function placeBuilding(
   state: GameState, row: number, col: number, type: BuildingType,
@@ -480,17 +616,17 @@ export function placeBuilding(
     if (state.grid[row][col].type === 'empty') return null;
     const newGrid = state.grid.map(r => r.map(c => ({ ...c })));
     const refund = Math.round(BUILDINGS[state.grid[row][col].type].cost * 0.25);
-    newGrid[row][col] = { type: 'empty', level: 1 };
+    newGrid[row][col] = { type: 'empty', level: 1, visitors: 0, totalVisits: 0, revenue: 0 };
     return { ...state, grid: newGrid, money: state.money + refund };
   }
   if (state.grid[row][col].type !== 'empty') return null;
   if (state.money < BUILDINGS[type].cost) return null;
   const newGrid = state.grid.map(r => r.map(c => ({ ...c })));
-  newGrid[row][col] = { type, level: 1 };
+  newGrid[row][col] = { type, level: 1, visitors: 0, totalVisits: 0, revenue: 0 };
   return { ...state, grid: newGrid, money: state.money - BUILDINGS[type].cost };
 }
 
-// ── Upgrade building ────────────────────────────────────────
+// ── Upgrade building ─────────────────────────────────────────
 
 export function upgradeBuilding(
   state: GameState, row: number, col: number,
@@ -500,36 +636,38 @@ export function upgradeBuilding(
   if (cell.level >= 3) return null;
   const cost = getUpgradeCost(cell.type, cell.level);
   if (state.money < cost) return null;
-
   const newGrid = state.grid.map(r => r.map(c => ({ ...c })));
   newGrid[row][col].level = cell.level + 1;
   return { ...state, grid: newGrid, money: state.money - cost };
 }
 
-// ── Building info ───────────────────────────────────────────
+// ── Building stats ───────────────────────────────────────────
 
 export function getBuildingStats(state: GameState, r: number, c: number): {
-  income: number;
-  happiness: number;
-  population: number;
-  adjacencyIncome: number;
-  adjacencyHappiness: number;
+  revenuePerVisit: number;
+  upkeep: number;
+  capacity: number;
+  visitors: number;
+  totalVisits: number;
+  happinessEffect: number;
   level: number;
   upgradeCost: number;
+  needFulfilled: string | null;
 } | null {
   const cell = state.grid[r][c];
   if (cell.type === 'empty') return null;
   const info = BUILDINGS[cell.type];
   const lvlMul = getLevelMultiplier(cell.level);
-  const adj = calculateAdjacencyBonus(state.grid, r, c);
 
   return {
-    income: Math.round(info.incomeEffect * lvlMul),
-    happiness: Math.round(info.happinessEffect * lvlMul),
-    population: Math.round(info.popEffect * lvlMul),
-    adjacencyIncome: adj.income,
-    adjacencyHappiness: adj.happiness,
+    revenuePerVisit: Math.round(info.revenuePerVisit * lvlMul),
+    upkeep: Math.round(info.upkeepPerTick * lvlMul),
+    capacity: Math.floor(info.capacity * lvlMul),
+    visitors: cell.visitors,
+    totalVisits: cell.totalVisits,
+    happinessEffect: Math.round(info.happinessEffect * lvlMul),
     level: cell.level,
     upgradeCost: getUpgradeCost(cell.type, cell.level),
+    needFulfilled: info.needFulfilled,
   };
 }

@@ -11,11 +11,52 @@ export type BuildingType =
   | 'fire_station'
   | 'police';
 
+// ── Citizen needs & states ─────────────────────────────────
+
+export type CitizenState =
+  | 'idle'        // at home, deciding what to do
+  | 'walking'     // moving to a destination
+  | 'visiting'    // inside a building (consuming service)
+  | 'returning';  // heading home
+
+export interface CitizenNeeds {
+  shopping: number;    // 0-100, increases over time
+  entertainment: number;
+  work: number;        // need to earn money / contribute
+  health: number;      // decreases slowly, hospital fixes
+  education: number;   // school need
+}
+
+export interface Citizen {
+  id: number;
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  color: string;
+  speed: number;
+  state: CitizenState;
+  homeR: number;       // home tile row
+  homeC: number;       // home tile col
+  targetR: number;     // destination tile row
+  targetC: number;     // destination tile col
+  targetType: BuildingType | null;
+  needs: CitizenNeeds;
+  satisfaction: number; // 0-100 overall happiness
+  visitTimer: number;   // ticks remaining at current building
+  wallet: number;       // personal money (cosmetic)
+}
+
+// ── Building ───────────────────────────────────────────────
+
 export interface Building {
   type: BuildingType;
   level: number;
   onFire?: boolean;
   fireTimer?: number;
+  visitors: number;     // current visitors inside
+  totalVisits: number;  // lifetime visits (for stats)
+  revenue: number;      // money earned this cycle
 }
 
 export interface BuildingInfo {
@@ -24,24 +65,20 @@ export interface BuildingInfo {
   icon: string;
   cost: number;
   description: string;
-  popEffect: number;
-  incomeEffect: number;
-  happinessEffect: number;
+  capacity: number;       // max simultaneous visitors
+  revenuePerVisit: number; // money earned per visitor
+  upkeepPerTick: number;   // maintenance cost per tick
+  happinessEffect: number; // passive area happiness
+  popCapacity: number;     // how many citizens can live here (residential only)
+  needFulfilled: keyof CitizenNeeds | null; // which need this satisfies
+  fulfillAmount: number;   // how much of that need is satisfied per visit
+  visitDuration: number;   // ticks to complete a visit
   height: number;
   wallLeft: string;
   wallRight: string;
   roofColor: string;
   category: 'zone' | 'service' | 'infrastructure' | 'special';
-  upgradeCostMult: number; // multiplier for upgrade cost
-}
-
-export interface Citizen {
-  x: number;
-  y: number;
-  tx: number;
-  ty: number;
-  color: string;
-  speed: number;
+  upgradeCostMult: number;
 }
 
 export interface SmokeParticle {
@@ -60,7 +97,7 @@ export interface GameEvent {
   type: 'fire' | 'boom' | 'storm' | 'festival' | 'population_surge';
   label: string;
   description: string;
-  duration: number; // ticks remaining
+  duration: number;
   effect: Partial<{ incomeMult: number; happinessAdd: number; popAdd: number }>;
 }
 
@@ -76,7 +113,7 @@ export interface Achievement {
 export interface Notification {
   text: string;
   color: string;
-  time: number; // timestamp
+  time: number;
 }
 
 export interface GameState {
@@ -89,11 +126,15 @@ export interface GameState {
   smoke: SmokeParticle[];
   speed: GameSpeed;
   events: GameEvent[];
-  dayTime: number; // 0-1 representing time of day (0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk)
+  dayTime: number;
   totalBuildings: number;
   totalMoneyEarned: number;
+  totalVisits: number;
+  incomeThisCycle: number;  // income earned since last tick (from visitor transactions)
+  upkeepThisCycle: number;  // total upkeep costs
   notifications: Notification[];
   achievementsUnlocked: string[];
+  nextCitizenId: number;
 }
 
 export const GRID = 14;
@@ -114,67 +155,89 @@ export function randomCitizenColor(): string {
 export const BUILDINGS: Record<BuildingType, BuildingInfo> = {
   empty: {
     type: 'empty', label: 'Clear', icon: 'X', cost: 0,
-    description: 'Demolish', popEffect: 0, incomeEffect: 0, happinessEffect: 0,
+    description: 'Demolish building',
+    capacity: 0, revenuePerVisit: 0, upkeepPerTick: 0, happinessEffect: 0,
+    popCapacity: 0, needFulfilled: null, fulfillAmount: 0, visitDuration: 0,
     height: 0, wallLeft: '', wallRight: '', roofColor: '',
     category: 'special', upgradeCostMult: 0,
   },
   residential: {
     type: 'residential', label: 'House', icon: 'H', cost: 100,
-    description: '+10 pop, +$5/s', popEffect: 10, incomeEffect: 5, happinessEffect: -1,
+    description: 'Home for 4 citizens',
+    capacity: 0, revenuePerVisit: 0, upkeepPerTick: 2, happinessEffect: 0,
+    popCapacity: 4, needFulfilled: null, fulfillAmount: 0, visitDuration: 0,
     height: 18, wallLeft: '#d4c4a0', wallRight: '#baa880', roofColor: '#b04030',
     category: 'zone', upgradeCostMult: 1.5,
   },
   commercial: {
     type: 'commercial', label: 'Shop', icon: 'S', cost: 200,
-    description: '+$15/s, +2 happy', popEffect: 0, incomeEffect: 15, happinessEffect: 2,
+    description: 'Citizens shop here for $8/visit',
+    capacity: 6, revenuePerVisit: 8, upkeepPerTick: 3, happinessEffect: 1,
+    popCapacity: 0, needFulfilled: 'shopping', fulfillAmount: 40, visitDuration: 3,
     height: 26, wallLeft: '#e8dcc8', wallRight: '#ccc0a8', roofColor: '#3080c0',
     category: 'zone', upgradeCostMult: 1.5,
   },
   industrial: {
     type: 'industrial', label: 'Factory', icon: 'F', cost: 300,
-    description: '+$25/s, -5 happy', popEffect: 0, incomeEffect: 25, happinessEffect: -5,
+    description: 'Workers earn $12/shift',
+    capacity: 8, revenuePerVisit: 12, upkeepPerTick: 5, happinessEffect: -3,
+    popCapacity: 0, needFulfilled: 'work', fulfillAmount: 50, visitDuration: 5,
     height: 20, wallLeft: '#a0a0a0', wallRight: '#888888', roofColor: '#606060',
     category: 'zone', upgradeCostMult: 1.5,
   },
   park: {
     type: 'park', label: 'Park', icon: 'P', cost: 50,
-    description: '+8 happy, -$2/s', popEffect: 0, incomeEffect: -2, happinessEffect: 8,
+    description: 'Free entertainment, +6 happy',
+    capacity: 10, revenuePerVisit: 0, upkeepPerTick: 1, happinessEffect: 6,
+    popCapacity: 0, needFulfilled: 'entertainment', fulfillAmount: 35, visitDuration: 2,
     height: 2, wallLeft: '#3a8032', wallRight: '#2e6828', roofColor: '#4aa040',
     category: 'infrastructure', upgradeCostMult: 1.2,
   },
   road: {
     type: 'road', label: 'Road', icon: 'R', cost: 25,
-    description: 'Connect areas', popEffect: 0, incomeEffect: 0, happinessEffect: 0,
+    description: 'Connects areas, speeds travel',
+    capacity: 0, revenuePerVisit: 0, upkeepPerTick: 0, happinessEffect: 0,
+    popCapacity: 0, needFulfilled: null, fulfillAmount: 0, visitDuration: 0,
     height: 1, wallLeft: '#555', wallRight: '#444', roofColor: '#666',
     category: 'infrastructure', upgradeCostMult: 0,
   },
   power: {
     type: 'power', label: 'Power', icon: 'Z', cost: 500,
-    description: 'Powers 20 bldgs', popEffect: 0, incomeEffect: -10, happinessEffect: -2,
+    description: 'Powers 20 buildings',
+    capacity: 0, revenuePerVisit: 0, upkeepPerTick: 8, happinessEffect: -2,
+    popCapacity: 0, needFulfilled: null, fulfillAmount: 0, visitDuration: 0,
     height: 30, wallLeft: '#c0b070', wallRight: '#a09060', roofColor: '#d0c050',
     category: 'infrastructure', upgradeCostMult: 2,
   },
   hospital: {
     type: 'hospital', label: 'Hospital', icon: '+', cost: 400,
-    description: '+15% pop cap, +5 happy', popEffect: 15, incomeEffect: -8, happinessEffect: 5,
+    description: 'Heals citizens, +4 happy',
+    capacity: 4, revenuePerVisit: 0, upkeepPerTick: 6, happinessEffect: 4,
+    popCapacity: 0, needFulfilled: 'health', fulfillAmount: 60, visitDuration: 4,
     height: 24, wallLeft: '#e8e8e8', wallRight: '#d0d0d0', roofColor: '#f0f0f0',
     category: 'service', upgradeCostMult: 1.8,
   },
   school: {
     type: 'school', label: 'School', icon: 'B', cost: 350,
-    description: '+10% income, +3 happy', popEffect: 0, incomeEffect: -5, happinessEffect: 3,
+    description: 'Educates citizens, +10% revenue',
+    capacity: 6, revenuePerVisit: 0, upkeepPerTick: 4, happinessEffect: 3,
+    popCapacity: 0, needFulfilled: 'education', fulfillAmount: 45, visitDuration: 4,
     height: 22, wallLeft: '#c8a878', wallRight: '#b09060', roofColor: '#904030',
     category: 'service', upgradeCostMult: 1.6,
   },
   fire_station: {
     type: 'fire_station', label: 'Fire Stn', icon: '!', cost: 250,
-    description: 'Prevents fires, +3 happy', popEffect: 0, incomeEffect: -3, happinessEffect: 3,
+    description: 'Prevents fires, +3 happy',
+    capacity: 0, revenuePerVisit: 0, upkeepPerTick: 3, happinessEffect: 3,
+    popCapacity: 0, needFulfilled: null, fulfillAmount: 0, visitDuration: 0,
     height: 20, wallLeft: '#d04040', wallRight: '#b03030', roofColor: '#cc3333',
     category: 'service', upgradeCostMult: 1.4,
   },
   police: {
     type: 'police', label: 'Police', icon: 'P', cost: 300,
-    description: '+4 happy, reduces crime', popEffect: 0, incomeEffect: -4, happinessEffect: 4,
+    description: '+4 happy, reduces crime',
+    capacity: 0, revenuePerVisit: 0, upkeepPerTick: 4, happinessEffect: 4,
+    popCapacity: 0, needFulfilled: null, fulfillAmount: 0, visitDuration: 0,
     height: 22, wallLeft: '#4060a0', wallRight: '#305080', roofColor: '#3050a0',
     category: 'service', upgradeCostMult: 1.5,
   },
@@ -201,10 +264,10 @@ export function getUpgradeCost(type: BuildingType, currentLevel: number): number
 }
 
 export function getLevelMultiplier(level: number): number {
-  return 1 + (level - 1) * 0.5; // 1x, 1.5x, 2x for levels 1, 2, 3
+  return 1 + (level - 1) * 0.5;
 }
 
-// Achievements definitions (check functions reference GameState)
+// Achievements
 export function createAchievements(): Achievement[] {
   return [
     {
@@ -215,14 +278,14 @@ export function createAchievements(): Achievement[] {
     },
     {
       id: 'growing_town', label: 'Growing Town', icon: '\u263A',
-      description: 'Reach 50 population',
-      check: (s) => s.population >= 50,
+      description: 'Reach 20 citizens',
+      check: (s) => s.population >= 20,
       unlocked: false,
     },
     {
       id: 'thriving_city', label: 'Thriving City', icon: '\u2605',
-      description: 'Reach 150 population',
-      check: (s) => s.population >= 150,
+      description: 'Reach 60 citizens',
+      check: (s) => s.population >= 60,
       unlocked: false,
     },
     {
@@ -244,9 +307,9 @@ export function createAchievements(): Achievement[] {
       unlocked: false,
     },
     {
-      id: 'industrial_rev', label: 'Industrial Revolution', icon: '\u2699',
-      description: 'Build 5 factories',
-      check: (s) => countType(s.grid, 'industrial') >= 5,
+      id: 'busy_city', label: 'Busy City', icon: '\u2699',
+      description: 'Reach 500 total visits',
+      check: (s) => s.totalVisits >= 500,
       unlocked: false,
     },
     {

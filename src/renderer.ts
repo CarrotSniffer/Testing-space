@@ -1,4 +1,4 @@
-import { GameState, BUILDINGS, GRID, TW, TH, HW, HH, Citizen, SmokeParticle } from './types';
+import { GameState, BUILDINGS, GRID, TW, TH, HW, HH, Citizen, SmokeParticle, getLevelMultiplier } from './types';
 
 // ── Coordinate helpers ──────────────────────────────────────────
 
@@ -943,6 +943,36 @@ function getTimeOfDayLabel(dayTime: number): string {
 
 export { getTimeOfDayLabel };
 
+// ── Visitor badge ────────────────────────────────────────────────
+
+function drawVisitorBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, visitors: number, capacity: number) {
+  if (capacity <= 0) return;
+  const bh = -8;
+  const fill = visitors / capacity;
+  const badgeX = cx + 12;
+  const badgeY = cy + bh - 4;
+
+  // Background pill
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  ctx.roundRect(badgeX - 10, badgeY - 5, 20, 10, 4);
+  ctx.fill();
+
+  // Fill bar
+  const barW = 16;
+  const barH = 4;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.fillRect(badgeX - 8, badgeY - 2, barW, barH);
+  ctx.fillStyle = fill >= 0.9 ? '#f87171' : fill >= 0.5 ? '#facc15' : '#4ade80';
+  ctx.fillRect(badgeX - 8, badgeY - 2, barW * fill, barH);
+
+  // Count text
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 6px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${visitors}/${capacity}`, badgeX, badgeY + 7);
+}
+
 // ── Main render ─────────────────────────────────────────────────
 
 let _frameTick = 0;
@@ -1019,6 +1049,13 @@ export function render(
         // Level stars
         const bh = BUILDINGS[cell.type].height;
         drawLevelStars(ctx, 0, -bh - 6, cell.level);
+
+        // Visitor badge
+        const bInfo = BUILDINGS[cell.type];
+        const cap = Math.floor(bInfo.capacity * getLevelMultiplier(cell.level));
+        if (cap > 0) {
+          drawVisitorBadge(ctx, 0, -bh - 12, cell.visitors, cap);
+        }
 
         // Fire effect
         if (cell.onFire) {
