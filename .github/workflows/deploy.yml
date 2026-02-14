@@ -34,18 +34,17 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
 
-      - name: Switch Pages source to gh-pages branch
+      - name: Configure Pages source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Updating GitHub Pages source to gh-pages branch..."
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          # Try to update Pages source to gh-pages branch
+          echo "Attempting to set Pages source to gh-pages branch..."
+          curl -sf -X PUT \
+            -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
             "https://api.github.com/repos/${{ github.repository }}/pages" \
-            -d '{"source":{"branch":"gh-pages","path":"/"}}')
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-          echo "HTTP Status: $HTTP_CODE"
-          echo "Response: $BODY"
-          if [ "$HTTP_CODE" -ge 400 ]; then
-            echo "::warning::Failed to update Pages source (HTTP $HTTP_CODE). You may need to manually change Pages source to 'gh-pages' branch in repo Settings > Pages."
-          fi
+            -d '{"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}' \
+          && echo "Pages source updated successfully" \
+          || echo "::warning::Could not update Pages source. Manually set Pages source to gh-pages branch in Settings > Pages."
