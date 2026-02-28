@@ -1,0 +1,18 @@
+{
+  "name": "Terraria Clone",
+  "short_name": "TerrClone",
+  "description": "2D sandbox mining game",
+  "start_url": "/Testing-space/games/terraria/",
+  "scope": "/Testing-space/games/terraria/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#0a0e1a",
+  "background_color": "#0a0e1a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a0e1a' width='100' height='100'/><text y='70' x='15' font-size='60'>⛏</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0e1a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="manifest.json" />
+  <title>Terraria Clone</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #game-gl {
+      z-index: 0;
+    }
+    #game-ui {
+      z-index: 1;
+    }
+    #loading {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 10;
+      background: #0a0e1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+    #loading h1 {
+      font-size: 28px;
+      margin-bottom: 16px;
+    }
+    #loading p {
+      color: #668;
+      font-size: 14px;
+    }
+  </style>
+  <script type="module" crossorigin src="/Testing-space/assets/terraria-Bz6eOwH-.js"></script>
+  <link rel="modulepreload" crossorigin href="/Testing-space/assets/modulepreload-polyfill-B5Qt9EMX.js">
+</head>
+<body>
+  <div id="loading">
+    <h1>Generating World...</h1>
+    <p>This may take a moment</p>
+  </div>
+  <canvas id="game-gl"></canvas>
+  <canvas id="game-ui"></canvas>
+</body>
+</html>
