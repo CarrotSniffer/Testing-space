@@ -166,7 +166,7 @@ export interface GameState {
   day: number;             // 1-20
   week: number;            // 1-4
   weekStartNW: number;     // net worth at start of week (for P&L)
-  bossDefeated: boolean[];
+  bossDefeated: number[];
 
   // UI state
   selectedCard: number | null;  // hand index

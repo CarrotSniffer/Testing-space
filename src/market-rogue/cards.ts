@@ -1,4 +1,5 @@
 import { CardDef, Card, CardRarity } from './types';
+export type { CardDef } from './types';
 
 // ── Card Definitions ────────────────────────────────────────
 

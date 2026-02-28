@@ -116,7 +116,7 @@ function handleAction(action: string, data?: string, tx = 0, ty = 0) {
         } else {
           // Execute immediately (no target needed)
           state = { ...state, selectedCard: idx };
-          executeCard(idx, -1);
+          executeCard(idx, -1, tx, ty);
         }
       }
       break;
@@ -130,7 +130,7 @@ function handleAction(action: string, data?: string, tx = 0, ty = 0) {
         showToast('Can\'t target this stock');
         break;
       }
-      executeCard(state.selectedCard, stockIdx);
+      executeCard(state.selectedCard, stockIdx, tx, ty);
       break;
     }
 
@@ -236,7 +236,7 @@ function handleAction(action: string, data?: string, tx = 0, ty = 0) {
 
 // ── Card Execution ──────────────────────────────────────────
 
-function executeCard(handIdx: number, stockIdx: number) {
+function executeCard(handIdx: number, stockIdx: number, tx = 0, ty = 0) {
   const card = state.hand[handIdx];
   if (!card) return;
   const def = getCardDef(card.defId);
