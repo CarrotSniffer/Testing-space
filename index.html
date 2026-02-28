@@ -2,137 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0a0e1a" />
-  <title>MiniCity - City Builder</title>
+  <title>Game Hub</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body {
-      width: 100%; height: 100%;
-      overflow: hidden;
+      min-height: 100vh;
       background: #0a0e1a;
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-      touch-action: none;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-    canvas {
-      display: block;
-      width: 100%; height: 100%;
-      position: absolute; top: 0; left: 0;
+      color: #fff;
     }
 
-    /* HUD */
-    #hud {
-      position: absolute; top: 0; left: 0; right: 0;
-      padding: env(safe-area-inset-top, 12px) 12px 10px;
-      background: linear-gradient(to bottom, rgba(10,14,26,0.95), rgba(10,14,26,0.7) 80%, transparent);
-      display: flex; justify-content: space-around;
-      pointer-events: none; z-index: 10;
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 24px;
     }
-    .hud-stat { text-align: center; }
-    .hud-label {
-      font-size: 10px; font-weight: 700; letter-spacing: 1.5px;
-      color: #546080; text-transform: uppercase;
-    }
-    .hud-value { font-size: 22px; font-weight: 800; color: #fff; }
-    .hud-sub { font-size: 11px; font-weight: 600; }
 
-    /* Toolbar */
-    #toolbar {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      padding: 8px 4px calc(env(safe-area-inset-bottom, 8px) + 4px);
-      background: linear-gradient(to top, rgba(10,14,26,0.97), rgba(10,14,26,0.8) 85%, transparent);
-      z-index: 10;
-      display: flex; gap: 6px;
-      overflow-x: auto; overflow-y: hidden;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
+    h1 {
+      font-size: 48px;
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #e94560, #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
-    #toolbar::-webkit-scrollbar { display: none; }
-    .tool-btn {
+
+    .subtitle {
+      text-align: center;
+      color: #546080;
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 48px;
+    }
+
+    .games-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .game-card {
+      background: rgba(30, 40, 65, 0.6);
+      border: 2px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .game-card:hover {
+      border-color: #e94560;
+      background: rgba(233, 69, 96, 0.08);
+      transform: translateY(-4px);
+    }
+
+    .game-card .icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
       flex-shrink: 0;
-      display: flex; flex-direction: column; align-items: center;
-      padding: 8px 10px 6px; min-width: 64px;
-      background: rgba(30,40,65,0.8); border-radius: 14px;
-      border: 2px solid transparent;
-      cursor: pointer; transition: all 0.15s;
-      -webkit-tap-highlight-color: transparent;
     }
-    .tool-btn.active { border-color: #e94560; background: rgba(233,69,96,0.15); }
-    .tool-btn.disabled { opacity: 0.35; }
-    .tool-icon {
-      font-size: 22px; line-height: 1.2; color: #aabbdd;
-      width: 30px; height: 30px;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(255,255,255,0.06); border-radius: 8px;
-    }
-    .tool-btn.active .tool-icon { color: #e94560; background: rgba(233,69,96,0.15); }
-    .tool-name { font-size: 10px; font-weight: 700; color: #8899bb; margin-top: 3px; }
-    .tool-btn.active .tool-name { color: #e94560; }
-    .tool-cost { font-size: 9px; color: #556; margin-top: 1px; }
 
-    /* Message toast */
-    #toast {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(233,69,96,0.92); color: #fff;
-      padding: 8px 20px; border-radius: 20px;
-      font-size: 14px; font-weight: 700;
-      pointer-events: none; z-index: 20;
-      opacity: 0; transition: opacity 0.25s;
+    .game-card .title {
+      font-size: 22px;
+      font-weight: 800;
     }
-    #toast.show { opacity: 1; }
 
-    /* Rotate button */
-    #rotate-btn {
-      position: absolute; right: 12px;
-      top: calc(env(safe-area-inset-top, 12px) + 70px);
-      width: 44px; height: 44px;
-      background: rgba(30,40,65,0.85);
-      border: 2px solid rgba(255,255,255,0.15);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer; z-index: 10;
-      -webkit-tap-highlight-color: transparent;
-      transition: background 0.15s;
+    .game-card .desc {
+      font-size: 14px;
+      color: #8899bb;
+      line-height: 1.5;
     }
-    #rotate-btn:active { background: rgba(233,69,96,0.3); }
-    #rotate-btn svg {
-      width: 22px; height: 22px;
-      fill: none; stroke: #aabbdd; stroke-width: 2;
-      stroke-linecap: round; stroke-linejoin: round;
+
+    .game-card .play-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #e94560;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .game-card.new-game {
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .game-card.new-game:hover {
+      border-color: #4ade80;
+      background: rgba(74, 222, 128, 0.06);
+    }
+    .game-card.new-game .play-label {
+      color: #4ade80;
+    }
+
+    footer {
+      text-align: center;
+      padding: 48px 24px 32px;
+      color: #334;
+      font-size: 13px;
     }
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
+  <div class="container">
+    <h1>Game Hub</h1>
+    <p class="subtitle">Pick a game to play</p>
 
-  <div id="hud">
-    <div class="hud-stat">
-      <div class="hud-label">Money</div>
-      <div class="hud-value" id="hud-money">$1,000</div>
-      <div class="hud-sub" id="hud-income" style="color:#4ade80">+0/s</div>
-    </div>
-    <div class="hud-stat">
-      <div class="hud-label">Pop</div>
-      <div class="hud-value" id="hud-pop">0</div>
-    </div>
-    <div class="hud-stat">
-      <div class="hud-label">Happy</div>
-      <div class="hud-value" id="hud-happy">50%</div>
+    <div class="games-grid">
+      <a class="game-card" href="games/minicity/">
+        <div class="icon" style="background: rgba(233,69,96,0.15); color: #e94560;">&#x2302;</div>
+        <div class="title">MiniCity</div>
+        <div class="desc">Build and manage your own tiny city. Place buildings, grow your population, and keep citizens happy.</div>
+        <div class="play-label">Play &#x2192;</div>
+      </a>
+
+      <a class="game-card new-game" href="games/new-game/">
+        <div class="icon" style="background: rgba(74,222,128,0.12); color: #4ade80;">+</div>
+        <div class="title">New Game</div>
+        <div class="desc">A starter template ready for your next game. Comes with canvas setup, game loop, and input handling.</div>
+        <div class="play-label">Play &#x2192;</div>
+      </a>
     </div>
   </div>
 
-  <div id="rotate-btn">
-    <svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-  </div>
-
-  <div id="toolbar"></div>
-  <div id="toast"></div>
-
-  <script type="module" src="/src/main.ts"></script>
+  <footer>Game Hub &middot; Hosted on GitHub Pages</footer>
 </body>
 </html>
