@@ -73,6 +73,8 @@ export function render(
   canvas: HTMLCanvasElement,
   state: GameState,
   scrollY: number,
+  hudHeight?: number,
+  tabBarHeight?: number,
 ): void {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.width / dpr;
@@ -86,8 +88,8 @@ export function render(
   ctx.fillRect(0, 0, w, h);
 
   // Content area (between HUD and tab bar)
-  const topY = 70;
-  const bottomY = h - 60;
+  const topY = (hudHeight || 70) + 4;
+  const bottomY = h - (tabBarHeight || 60);
   const contentH = bottomY - topY;
 
   ctx.save();

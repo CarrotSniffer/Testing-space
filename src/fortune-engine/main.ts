@@ -32,6 +32,8 @@ window.addEventListener('resize', resizeCanvas);
 
 // ── HUD ─────────────────────────────────────────────────────
 
+const hud = document.getElementById('hud')!;
+const tabbar = document.getElementById('tabbar')!;
 const hudCash = document.getElementById('hud-cash')!;
 const hudCps = document.getElementById('hud-cps')!;
 const hudNw = document.getElementById('hud-nw')!;
@@ -245,7 +247,9 @@ function frame(now: number) {
 
   // Render
   const scrollY = input.scrollY[state.activeTab] || 0;
-  render(ctx, canvas, state, scrollY);
+  const hudH = hud.offsetHeight;
+  const tabH = tabbar.offsetHeight;
+  render(ctx, canvas, state, scrollY, hudH, tabH);
 
   // Update HUD
   updateHUD();
