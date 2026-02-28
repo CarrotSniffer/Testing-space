@@ -1,0 +1,31 @@
+{
+  "name": "Fortune Engine",
+  "short_name": "Fortune",
+  "description": "Build your financial empire through investing and gambling",
+  "start_url": "/Testing-space/games/fortune-engine/",
+  "scope": "/Testing-space/games/fortune-engine/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0a0e1a",
+  "background_color": "#0a0e1a",
+  "icons": [
+    {
+      "src": "/Testing-space/assets/favicon.png",
+      "sizes": "48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "/Testing-space/assets/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/Testing-space/assets/adaptive-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["games"]
+}
