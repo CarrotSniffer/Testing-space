@@ -1,4 +1,5 @@
 import { InputState, CameraState } from '../core/types';
+import { TILE_SIZE, REACH_RANGE_X } from '../core/config';
 import { screenToWorld } from '../render/camera';
 import { TouchControls } from './touch-controls';
 
@@ -12,6 +13,7 @@ export class InputManager {
   private mouseScreenY = 0;
   private inventoryPressed = false;
   private scrollAccum = 0;  // accumulated scroll delta since last poll
+  private touchFacingRight = true;  // track facing for mobile smart cursor
 
   constructor(private canvas: HTMLCanvasElement) {
     this.touch = new TouchControls(canvas);
@@ -75,11 +77,26 @@ export class InputManager {
       this.state.attack = this.touch.attacking;
       this.state.interact = this.touch.placing;
 
+      // Track facing direction from joystick for smart cursor
+      if (this.touch.moveX < -0.3) this.touchFacingRight = false;
+      else if (this.touch.moveX > 0.3) this.touchFacingRight = true;
+
       // World tap sets cursor for mining/placing
       const tap = this.touch.consumeWorldTap();
       if (tap) {
         this.state.cursorScreen = { x: tap.x, y: tap.y };
         this.state.cursorWorld = screenToWorld(camera, tap.x * dpr, tap.y * dpr);
+      }
+
+      // Smart cursor: when mine/place buttons are held without a world tap,
+      // auto-target the block in front of the player (camera center ≈ player center)
+      if ((this.state.attack || this.state.interact) && !tap) {
+        const dir = this.touchFacingRight ? 1 : -1;
+        // Target ~2.5 tiles in front, at player's feet level (slightly below center)
+        this.state.cursorWorld = {
+          x: camera.x + dir * TILE_SIZE * Math.min(2.5, REACH_RANGE_X - 0.5),
+          y: camera.y + TILE_SIZE * 0.5,
+        };
       }
 
       // Hotbar tap
