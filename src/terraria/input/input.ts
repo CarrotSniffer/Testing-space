@@ -1,5 +1,5 @@
 import { InputState, CameraState } from '../core/types';
-import { TILE_SIZE, REACH_RANGE_X } from '../core/config';
+import { TILE_SIZE, REACH_RANGE_X, REACH_RANGE_Y } from '../core/config';
 import { screenToWorld } from '../render/camera';
 import { TouchControls } from './touch-controls';
 
@@ -12,8 +12,7 @@ export class InputManager {
   private mouseScreenX = 0;
   private mouseScreenY = 0;
   private inventoryPressed = false;
-  private scrollAccum = 0;  // accumulated scroll delta since last poll
-  private touchFacingRight = true;  // track facing for mobile smart cursor
+  private scrollAccum = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.touch = new TouchControls(canvas);
@@ -55,10 +54,8 @@ export class InputManager {
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Scroll wheel for hotbar cycling (Terraria: scroll to change selected slot)
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      // Accumulate scroll — positive deltaY = scroll down = next slot
       if (e.deltaY > 0) this.scrollAccum++;
       else if (e.deltaY < 0) this.scrollAccum--;
     }, { passive: false });
@@ -68,34 +65,37 @@ export class InputManager {
     const dpr = window.devicePixelRatio || 1;
 
     if (this.touch.active) {
-      // Touch controls active — override keyboard
+      // --- Touch controls (Terraria mobile style) ---
+
+      // Movement from left stick
       this.state.left = this.touch.moveX < -0.3;
       this.state.right = this.touch.moveX > 0.3;
       this.state.up = this.touch.moveY < -0.6;
       this.state.down = this.touch.moveY > 0.6;
       this.state.jump = this.touch.jumping || this.touch.moveY < -0.6;
+
+      // Attack/place from aim stick or world tap
       this.state.attack = this.touch.attacking;
       this.state.interact = this.touch.placing;
 
-      // Track facing direction from joystick for smart cursor
-      if (this.touch.moveX < -0.3) this.touchFacingRight = false;
-      else if (this.touch.moveX > 0.3) this.touchFacingRight = true;
-
-      // World tap sets cursor for mining/placing
+      // --- Cursor position ---
+      // Priority 1: Direct world tap (precision targeting — tap exactly where you want)
       const tap = this.touch.consumeWorldTap();
       if (tap) {
         this.state.cursorScreen = { x: tap.x, y: tap.y };
         this.state.cursorWorld = screenToWorld(camera, tap.x * dpr, tap.y * dpr);
       }
 
-      // Smart cursor: when mine/place buttons are held without a world tap,
-      // auto-target the block in front of the player (camera center ≈ player center)
-      if ((this.state.attack || this.state.interact) && !tap) {
-        const dir = this.touchFacingRight ? 1 : -1;
-        // Target ~2.5 tiles in front, at player's feet level (slightly below center)
+      // Priority 2: Right aim stick moves cursor relative to player (camera center)
+      // The stick direction + distance maps to a point within the reach range
+      if (this.touch.aimActive && this.touch.aimDistance > 0) {
+        // Map aim stick to world cursor within reach range
+        // aimX/Y are -1..1 direction, aimDistance is 0..1 push magnitude
+        const reachPxX = REACH_RANGE_X * TILE_SIZE;
+        const reachPxY = REACH_RANGE_Y * TILE_SIZE;
         this.state.cursorWorld = {
-          x: camera.x + dir * TILE_SIZE * Math.min(2.5, REACH_RANGE_X - 0.5),
-          y: camera.y + TILE_SIZE * 0.5,
+          x: camera.x + this.touch.aimX * reachPxX * this.touch.aimDistance,
+          y: camera.y + this.touch.aimY * reachPxY * this.touch.aimDistance,
         };
       }
 
@@ -104,13 +104,11 @@ export class InputManager {
       this.state.hotbarSelect = hotbar;
       this.state.scrollDelta = 0;
     } else {
-      // Keyboard + mouse (Terraria PC controls)
+      // --- Keyboard + mouse (Terraria PC controls) ---
       this.state.left = this.keys.has('KeyA') || this.keys.has('ArrowLeft');
       this.state.right = this.keys.has('KeyD') || this.keys.has('ArrowRight');
       this.state.up = this.keys.has('KeyW') || this.keys.has('ArrowUp');
       this.state.down = this.keys.has('KeyS') || this.keys.has('ArrowDown');
-
-      // Jump = Space only (Terraria: Space is jump, W/Up is for climbing ropes/platforms)
       this.state.jump = this.keys.has('Space');
 
       this.state.attack = this.mouseDown;
@@ -119,7 +117,6 @@ export class InputManager {
       this.state.cursorScreen = { x: this.mouseScreenX, y: this.mouseScreenY };
       this.state.cursorWorld = screenToWorld(camera, this.mouseScreenX * dpr, this.mouseScreenY * dpr);
 
-      // Hotbar selection via number keys (1-9 = slots 0-8, 0 = slot 9)
       this.state.hotbarSelect = -1;
       for (let i = 0; i < 10; i++) {
         if (this.keys.has(`Digit${(i + 1) % 10}`)) {
@@ -127,12 +124,11 @@ export class InputManager {
         }
       }
 
-      // Scroll wheel hotbar cycling
       this.state.scrollDelta = this.scrollAccum;
       this.scrollAccum = 0;
     }
 
-    // Inventory toggle: Escape key (Terraria default)
+    // Inventory toggle: Escape key
     const escDown = this.keys.has('Escape');
     this.state.inventoryToggle = escDown && !this.inventoryPressed;
     this.inventoryPressed = escDown;

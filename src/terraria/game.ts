@@ -1,7 +1,7 @@
 import { CameraState, GameClock, EnemyEntity } from './core/types';
 import { TILE_SIZE, TICK_RATE, DAY_LENGTH, PLAYER_WIDTH, REACH_RANGE_X, REACH_RANGE_Y } from './core/config';
 import { WebGLRenderer } from './render/webgl-renderer';
-import { createCamera, cameraFollow, cameraResize } from './render/camera';
+import { createCamera, cameraFollow, cameraResize, worldToScreen } from './render/camera';
 import { InputManager } from './input/input';
 import { EntityManager } from './entity/entity-manager';
 import { PhysicsEngine } from './physics/physics';
@@ -521,6 +521,33 @@ export class Game {
       ctx.fillRect((w - tw) / 2 - 4, hotbarY - 22, tw + 8, 18);
       ctx.fillStyle = '#ddd';
       ctx.fillText(name, (w - tw) / 2, hotbarY - 8);
+    }
+
+    // Mobile crosshair — shows where the aim stick / world tap is targeting
+    if (this.input.touch.isMobile() && !this.dead) {
+      const curWorld = this.input.state.cursorWorld;
+      const dpr2 = window.devicePixelRatio || 1;
+      const screenPos = worldToScreen(this.camera, curWorld.x, curWorld.y);
+      const sx = screenPos.x / dpr2;
+      const sy = screenPos.y / dpr2;
+
+      // Only draw if on screen
+      if (sx > 0 && sx < w && sy > 0 && sy < h) {
+        const size = 8;
+        ctx.strokeStyle = 'rgba(255,230,50,0.8)';
+        ctx.lineWidth = 2;
+        // Crosshair lines
+        ctx.beginPath();
+        ctx.moveTo(sx - size, sy);
+        ctx.lineTo(sx - 3, sy);
+        ctx.moveTo(sx + 3, sy);
+        ctx.lineTo(sx + size, sy);
+        ctx.moveTo(sx, sy - size);
+        ctx.lineTo(sx, sy - 3);
+        ctx.moveTo(sx, sy + 3);
+        ctx.lineTo(sx, sy + size);
+        ctx.stroke();
+      }
     }
 
     // Touch controls overlay

@@ -1,4 +1,16 @@
-import { Vec2 } from '../core/types';
+/**
+ * Terraria-style mobile touch controls:
+ *
+ * - LEFT STICK (bottom-left): Movement joystick, floating where you touch
+ * - RIGHT STICK (bottom-right): Aim joystick, moves a crosshair cursor
+ *   In "aim and use" mode: touching the aim stick also triggers item use (mine/attack)
+ * - JUMP BUTTON: Upper-right area
+ * - WORLD TAP: Tapping the middle/upper area of the screen directly sets cursor
+ *   position AND triggers item use at that location (precision mining/placing)
+ * - HOTBAR: Bottom-center strip, tap to select slots
+ *
+ * This mirrors Terraria mobile's dual-stick + direct-touch hybrid approach.
+ */
 
 interface ActiveTouch {
   id: number;
@@ -6,38 +18,51 @@ interface ActiveTouch {
   startY: number;
   x: number;
   y: number;
-  zone: 'joystick' | 'action' | 'world' | 'hotbar';
+  zone: 'move_stick' | 'aim_stick' | 'jump' | 'world' | 'hotbar';
 }
 
 export class TouchControls {
   active = false;
 
-  // Joystick output
+  // Left stick output (movement)
   moveX = 0; // -1 to 1
   moveY = 0; // -1 to 1
 
-  // Buttons
+  // Right stick output (aim direction, normalized)
+  aimX = 0;  // -1 to 1
+  aimY = 0;  // -1 to 1
+  aimActive = false;     // true when right stick is being touched
+  aimDistance = 0;        // 0-1, how far the stick is pushed (controls cursor reach)
+
+  // Actions
   jumping = false;
-  attacking = false;
+  attacking = false;     // true when aim stick is active (aim-and-use) OR world tap
   placing = false;
 
-  // World tap target
-  worldTap = false;
-  worldTapX = 0;
-  worldTapY = 0;
+  // World tap target (for direct precision taps on the game world)
+  private _worldTap = false;
+  private _worldTapX = 0;
+  private _worldTapY = 0;
 
   // Hotbar tap
-  hotbarTap = -1;
+  private _hotbarTap = -1;
+
+  // Place mode toggle (switch between mine and place)
+  placeMode = false;
 
   private touches = new Map<number, ActiveTouch>();
-  private joystickCenter = { x: 0, y: 0 };
-  private readonly JOYSTICK_RADIUS = 50;
+
+  // Left stick
+  private moveStickCenter = { x: 0, y: 0 };
+  private readonly STICK_RADIUS = 55;
   private readonly DEADZONE = 0.15;
 
-  // Button positions (computed on resize)
-  private btnJump = { x: 0, y: 0, r: 30 };
-  private btnAttack = { x: 0, y: 0, r: 30 };
-  private btnPlace = { x: 0, y: 0, r: 26 };
+  // Right stick
+  private aimStickCenter = { x: 0, y: 0 };
+
+  // Button positions
+  private btnJump = { x: 0, y: 0, r: 34 };
+  private btnToggle = { x: 0, y: 0, r: 22 }; // mine/place toggle
 
   private screenW = 0;
   private screenH = 0;
@@ -57,11 +82,10 @@ export class TouchControls {
     this.screenW = window.innerWidth;
     this.screenH = window.innerHeight;
 
-    // Right-side buttons
-    const rx = this.screenW - 70;
-    this.btnJump = { x: rx, y: this.screenH - 160, r: 32 };
-    this.btnAttack = { x: rx - 10, y: this.screenH - 90, r: 32 };
-    this.btnPlace = { x: rx - 70, y: this.screenH - 120, r: 26 };
+    // Jump button — upper right
+    this.btnJump = { x: this.screenW - 65, y: this.screenH - 190, r: 34 };
+    // Mine/Place toggle — above the aim stick area
+    this.btnToggle = { x: this.screenW - 130, y: this.screenH - 190, r: 22 };
   }
 
   private classifyZone(x: number, y: number): ActiveTouch['zone'] {
@@ -73,16 +97,33 @@ export class TouchControls {
       return 'hotbar';
     }
 
-    // Left third = joystick
-    if (x < this.screenW * 0.35 && y > this.screenH * 0.4) {
-      return 'joystick';
+    // Jump button check
+    const jdx = x - this.btnJump.x;
+    const jdy = y - this.btnJump.y;
+    if (Math.sqrt(jdx * jdx + jdy * jdy) < this.btnJump.r * 1.5) {
+      return 'jump';
     }
 
-    // Right side buttons
-    if (x > this.screenW * 0.6 && y > this.screenH * 0.4) {
-      return 'action';
+    // Toggle button check
+    const tdx = x - this.btnToggle.x;
+    const tdy = y - this.btnToggle.y;
+    if (Math.sqrt(tdx * tdx + tdy * tdy) < this.btnToggle.r * 1.5) {
+      // Toggle mine/place on tap — handle inline, classify as jump zone to ignore
+      this.placeMode = !this.placeMode;
+      return 'jump'; // just consume the tap
     }
 
+    // Bottom-left area = movement stick
+    if (x < this.screenW * 0.35 && y > this.screenH * 0.35) {
+      return 'move_stick';
+    }
+
+    // Bottom-right area = aim stick
+    if (x > this.screenW * 0.6 && y > this.screenH * 0.35) {
+      return 'aim_stick';
+    }
+
+    // Everything else = world tap (direct precision targeting)
     return 'world';
   }
 
@@ -101,14 +142,17 @@ export class TouchControls {
       };
       this.touches.set(t.identifier, touch);
 
-      if (zone === 'joystick') {
-        this.joystickCenter = { x: t.clientX, y: t.clientY };
+      if (zone === 'move_stick') {
+        this.moveStickCenter = { x: t.clientX, y: t.clientY };
+      } else if (zone === 'aim_stick') {
+        this.aimStickCenter = { x: t.clientX, y: t.clientY };
       } else if (zone === 'hotbar') {
         this.handleHotbarTap(t.clientX);
       } else if (zone === 'world') {
-        this.worldTap = true;
-        this.worldTapX = t.clientX;
-        this.worldTapY = t.clientY;
+        // Direct world tap = set cursor + trigger item use
+        this._worldTap = true;
+        this._worldTapX = t.clientX;
+        this._worldTapY = t.clientY;
       }
     }
     this.updateState();
@@ -121,6 +165,13 @@ export class TouchControls {
       if (touch) {
         touch.x = t.clientX;
         touch.y = t.clientY;
+
+        // If world touch is being dragged, update cursor position continuously
+        if (touch.zone === 'world') {
+          this._worldTap = true;
+          this._worldTapX = t.clientX;
+          this._worldTapY = t.clientY;
+        }
       }
     }
     this.updateState();
@@ -143,94 +194,150 @@ export class TouchControls {
     const hotbarX = (this.screenW - hotbarW) / 2;
     const slot = Math.floor((x - hotbarX) / slotSize);
     if (slot >= 0 && slot < hotbarSlots) {
-      this.hotbarTap = slot;
+      this._hotbarTap = slot;
     }
   }
 
   private updateState() {
     this.moveX = 0;
     this.moveY = 0;
+    this.aimX = 0;
+    this.aimY = 0;
+    this.aimActive = false;
+    this.aimDistance = 0;
     this.jumping = false;
     this.attacking = false;
     this.placing = false;
 
+    let hasWorldTouch = false;
+
     for (const touch of this.touches.values()) {
-      if (touch.zone === 'joystick') {
-        const dx = touch.x - this.joystickCenter.x;
-        const dy = touch.y - this.joystickCenter.y;
+      if (touch.zone === 'move_stick') {
+        const dx = touch.x - this.moveStickCenter.x;
+        const dy = touch.y - this.moveStickCenter.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const maxDist = this.JOYSTICK_RADIUS;
+        const maxDist = this.STICK_RADIUS;
 
         if (dist > this.DEADZONE * maxDist) {
           this.moveX = Math.max(-1, Math.min(1, dx / maxDist));
           this.moveY = Math.max(-1, Math.min(1, dy / maxDist));
         }
-      } else if (touch.zone === 'action') {
-        // Which button is closest?
-        const distJump = this.distToBtn(touch.x, touch.y, this.btnJump);
-        const distAttack = this.distToBtn(touch.x, touch.y, this.btnAttack);
-        const distPlace = this.distToBtn(touch.x, touch.y, this.btnPlace);
+      } else if (touch.zone === 'aim_stick') {
+        const dx = touch.x - this.aimStickCenter.x;
+        const dy = touch.y - this.aimStickCenter.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = this.STICK_RADIUS;
 
-        if (distJump < this.btnJump.r * 1.5) this.jumping = true;
-        if (distAttack < this.btnAttack.r * 1.5) this.attacking = true;
-        if (distPlace < this.btnPlace.r * 1.5) this.placing = true;
+        this.aimActive = true;
+        if (dist > this.DEADZONE * maxDist) {
+          this.aimX = Math.max(-1, Math.min(1, dx / maxDist));
+          this.aimY = Math.max(-1, Math.min(1, dy / maxDist));
+          this.aimDistance = Math.min(1, dist / maxDist);
+        }
+
+        // Aim stick = "aim and use" mode — touching it triggers item use
+        if (this.placeMode) {
+          this.placing = true;
+        } else {
+          this.attacking = true;
+        }
+      } else if (touch.zone === 'jump') {
+        this.jumping = true;
+      } else if (touch.zone === 'world') {
+        hasWorldTouch = true;
+        // World touch triggers attack/place based on mode
+        if (this.placeMode) {
+          this.placing = true;
+        } else {
+          this.attacking = true;
+        }
       }
     }
-  }
-
-  private distToBtn(x: number, y: number, btn: { x: number; y: number; r: number }): number {
-    const dx = x - btn.x;
-    const dy = y - btn.y;
-    return Math.sqrt(dx * dx + dy * dy);
   }
 
   // Draw touch control overlays on the UI canvas
   drawControls(ctx: CanvasRenderingContext2D) {
     if (!this.isMobile()) return;
 
-    // Joystick base
-    let joyActive = false;
+    // --- Left movement stick ---
+    let moveActive = false;
     for (const t of this.touches.values()) {
-      if (t.zone === 'joystick') { joyActive = true; break; }
+      if (t.zone === 'move_stick') { moveActive = true; break; }
     }
 
-    if (joyActive) {
-      // Base circle
+    if (moveActive) {
       ctx.beginPath();
-      ctx.arc(this.joystickCenter.x, this.joystickCenter.y, this.JOYSTICK_RADIUS, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.arc(this.moveStickCenter.x, this.moveStickCenter.y, this.STICK_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Thumb
-      const thumbX = this.joystickCenter.x + this.moveX * this.JOYSTICK_RADIUS;
-      const thumbY = this.joystickCenter.y + this.moveY * this.JOYSTICK_RADIUS;
+      const thumbX = this.moveStickCenter.x + this.moveX * this.STICK_RADIUS;
+      const thumbY = this.moveStickCenter.y + this.moveY * this.STICK_RADIUS;
       ctx.beginPath();
       ctx.arc(thumbX, thumbY, 20, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.25)';
       ctx.fill();
     } else {
-      // Idle hint
       const hintX = 90;
       const hintY = this.screenH - 130;
       ctx.beginPath();
-      ctx.arc(hintX, hintY, this.JOYSTICK_RADIUS, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.arc(hintX, hintY, this.STICK_RADIUS, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('MOVE', hintX, hintY + 4);
       ctx.textAlign = 'left';
     }
 
-    // Action buttons
-    this.drawButton(ctx, this.btnJump, 'JUMP', this.jumping);
-    this.drawButton(ctx, this.btnAttack, 'MINE', this.attacking);
-    this.drawButton(ctx, this.btnPlace, 'PLACE', this.placing);
+    // --- Right aim stick ---
+    let aimTouchActive = false;
+    for (const t of this.touches.values()) {
+      if (t.zone === 'aim_stick') { aimTouchActive = true; break; }
+    }
+
+    if (aimTouchActive) {
+      ctx.beginPath();
+      ctx.arc(this.aimStickCenter.x, this.aimStickCenter.y, this.STICK_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,200,50,0.06)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,200,50,0.25)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const thumbX = this.aimStickCenter.x + this.aimX * this.STICK_RADIUS;
+      const thumbY = this.aimStickCenter.y + this.aimY * this.STICK_RADIUS;
+      ctx.beginPath();
+      ctx.arc(thumbX, thumbY, 18, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,200,50,0.3)';
+      ctx.fill();
+    } else {
+      const hintX = this.screenW - 90;
+      const hintY = this.screenH - 110;
+      ctx.beginPath();
+      ctx.arc(hintX, hintY, this.STICK_RADIUS, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,200,50,0.08)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,200,50,0.12)';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('AIM', hintX, hintY + 4);
+      ctx.textAlign = 'left';
+    }
+
+    // --- Jump button ---
+    this.drawButton(ctx, this.btnJump, 'JUMP', this.jumping, 'rgba(255,255,255,');
+
+    // --- Mine/Place toggle ---
+    const toggleLabel = this.placeMode ? 'PLACE' : 'MINE';
+    const toggleColor = this.placeMode ? 'rgba(100,200,255,' : 'rgba(255,200,50,';
+    this.drawButton(ctx, this.btnToggle, toggleLabel, false, toggleColor);
   }
 
   private drawButton(
@@ -238,16 +345,17 @@ export class TouchControls {
     btn: { x: number; y: number; r: number },
     label: string,
     pressed: boolean,
+    colorBase: string,
   ) {
     ctx.beginPath();
     ctx.arc(btn.x, btn.y, btn.r, 0, Math.PI * 2);
-    ctx.fillStyle = pressed ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)';
+    ctx.fillStyle = pressed ? colorBase + '0.25)' : colorBase + '0.08)';
     ctx.fill();
-    ctx.strokeStyle = pressed ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)';
+    ctx.strokeStyle = pressed ? colorBase + '0.5)' : colorBase + '0.2)';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.fillStyle = pressed ? '#fff' : 'rgba(255,255,255,0.4)';
-    ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = pressed ? '#fff' : colorBase + '0.5)';
+    ctx.font = 'bold 10px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(label, btn.x, btn.y + 4);
     ctx.textAlign = 'left';
@@ -258,14 +366,14 @@ export class TouchControls {
   }
 
   consumeHotbarTap(): number {
-    const t = this.hotbarTap;
-    this.hotbarTap = -1;
+    const t = this._hotbarTap;
+    this._hotbarTap = -1;
     return t;
   }
 
   consumeWorldTap(): { x: number; y: number } | null {
-    if (!this.worldTap) return null;
-    this.worldTap = false;
-    return { x: this.worldTapX, y: this.worldTapY };
+    if (!this._worldTap) return null;
+    this._worldTap = false;
+    return { x: this._worldTapX, y: this._worldTapY };
   }
 }
