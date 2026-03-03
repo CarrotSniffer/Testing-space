@@ -71,6 +71,9 @@ export interface PlayerEntity extends EntityBase {
   inventory: Inventory;
   miningTarget: { tx: number; ty: number; progress: number } | null;
   jumpHeld: boolean;
+  jumpTimer: number;       // ticks remaining of sustained jump ascent
+  fallStartY: number;      // pixel Y where the player started falling (for fall damage)
+  isFalling: boolean;      // true when falling (vel.y > 0 and not on ground)
   attackCooldown: number;
   selectedSlot: number;
 }
@@ -104,6 +107,8 @@ export type Entity = PlayerEntity | EnemyEntity | ProjectileEntity | ItemDropEnt
 export interface InputState {
   left: boolean;
   right: boolean;
+  up: boolean;
+  down: boolean;
   jump: boolean;
   attack: boolean;
   interact: boolean;
@@ -111,6 +116,7 @@ export interface InputState {
   cursorScreen: Vec2;
   inventoryToggle: boolean;
   hotbarSelect: number;
+  scrollDelta: number;     // mouse wheel: -1 = scroll up (prev slot), +1 = scroll down (next slot)
 }
 
 export interface CameraState {

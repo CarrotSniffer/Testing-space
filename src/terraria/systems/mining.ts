@@ -1,5 +1,5 @@
 import { PlayerEntity, InputState } from '../core/types';
-import { TILE_SIZE, REACH_DISTANCE } from '../core/config';
+import { TILE_SIZE, REACH_RANGE_X, REACH_RANGE_Y } from '../core/config';
 import { WorldManager } from '../world/world';
 import { getBlockDef, BLOCK } from '../data/blocks';
 import { getHeldItemDef, getHeldStack, consumeHeldItem, addItem } from './inventory';
@@ -30,12 +30,12 @@ export class MiningSystem {
     const tx = Math.floor(input.cursorWorld.x / TILE_SIZE);
     const ty = Math.floor(input.cursorWorld.y / TILE_SIZE);
 
-    // Check reach distance from player center
+    // Check reach — Terraria uses rectangular range (tileRangeX / tileRangeY), NOT circular
     const pcx = (player.pos.x + player.size.x / 2) / TILE_SIZE;
     const pcy = (player.pos.y + player.size.y / 2) / TILE_SIZE;
-    const dx = tx + 0.5 - pcx;
-    const dy = ty + 0.5 - pcy;
-    if (dx * dx + dy * dy > REACH_DISTANCE * REACH_DISTANCE) {
+    const dx = Math.abs(tx + 0.5 - pcx);
+    const dy = Math.abs(ty + 0.5 - pcy);
+    if (dx > REACH_RANGE_X || dy > REACH_RANGE_Y) {
       this.miningState = null;
       return;
     }
@@ -102,12 +102,12 @@ export class MiningSystem {
     const tx = Math.floor(input.cursorWorld.x / TILE_SIZE);
     const ty = Math.floor(input.cursorWorld.y / TILE_SIZE);
 
-    // Check reach
+    // Check reach — rectangular (Terraria tileRangeX/Y)
     const pcx = (player.pos.x + player.size.x / 2) / TILE_SIZE;
     const pcy = (player.pos.y + player.size.y / 2) / TILE_SIZE;
-    const dx = tx + 0.5 - pcx;
-    const dy = ty + 0.5 - pcy;
-    if (dx * dx + dy * dy > REACH_DISTANCE * REACH_DISTANCE) return;
+    const dx = Math.abs(tx + 0.5 - pcx);
+    const dy = Math.abs(ty + 0.5 - pcy);
+    if (dx > REACH_RANGE_X || dy > REACH_RANGE_Y) return;
 
     // Target must be air
     if (world.getBlock(tx, ty) !== BLOCK.AIR) return;

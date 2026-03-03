@@ -1,5 +1,5 @@
 import { CameraState, GameClock, EnemyEntity } from './core/types';
-import { TILE_SIZE, TICK_RATE, DAY_LENGTH, PLAYER_WIDTH } from './core/config';
+import { TILE_SIZE, TICK_RATE, DAY_LENGTH, PLAYER_WIDTH, REACH_RANGE_X, REACH_RANGE_Y } from './core/config';
 import { WebGLRenderer } from './render/webgl-renderer';
 import { createCamera, cameraFollow, cameraResize } from './render/camera';
 import { InputManager } from './input/input';
@@ -156,15 +156,22 @@ export class Game {
 
     this.input.poll(this.camera);
 
-    // Update entities
+    // Update entities (updatePlayer returns fall damage)
     this.entityManager.update(this.input.state, this.physics, this.world);
     this.physics.moveAndCollide(this.entityManager.player, this.world);
 
+    // Apply fall damage (calculated by updatePlayer after landing)
+    const player = this.entityManager.player;
+    const fallDmg = this.entityManager.lastFallDamage;
+    if (fallDmg > 0) {
+      player.hp = Math.max(0, player.hp - fallDmg);
+      this.damageFlash = 10;
+    }
+
     // Mining/placing
-    this.mining.update(this.entityManager.player, this.world, this.input.state);
+    this.mining.update(player, this.world, this.input.state);
 
     // Combat
-    const player = this.entityManager.player;
     const prevHp = player.hp;
     const enemies = this.entityManager.getEnemies();
     const { killed } = this.combat.update(player, enemies, this.input.state.attack);
@@ -212,6 +219,9 @@ export class Game {
     player.vel.y = 0;
     player.hp = player.maxHp;
     player.invulnTimer = 60;
+    player.jumpTimer = 0;
+    player.isFalling = false;
+    player.fallStartY = player.pos.y;
     this.dead = false;
   }
 
@@ -317,20 +327,29 @@ export class Game {
       }
     }
 
-    // Block cursor
+    // Block cursor — Terraria-style yellow outline (rectangular reach check)
     if (!this.dead) {
       const curTx = Math.floor(this.input.state.cursorWorld.x / TILE_SIZE);
       const curTy = Math.floor(this.input.state.cursorWorld.y / TILE_SIZE);
       const pcx = (player.pos.x + player.size.x / 2) / TILE_SIZE;
       const pcy = (player.pos.y + player.size.y / 2) / TILE_SIZE;
-      const dx = curTx + 0.5 - pcx;
-      const dy = curTy + 0.5 - pcy;
-      if (dx * dx + dy * dy <= 25) {
+      const dx = Math.abs(curTx + 0.5 - pcx);
+      const dy = Math.abs(curTy + 0.5 - pcy);
+      if (dx <= REACH_RANGE_X && dy <= REACH_RANGE_Y) {
+        // Yellow highlight fill (like Terraria's smart cursor target)
         this.renderer.drawRect(
           this.camera,
           curTx * TILE_SIZE, curTy * TILE_SIZE, TILE_SIZE, TILE_SIZE,
-          1, 1, 1, 0.08,
+          1, 0.9, 0.2, 0.15,
         );
+        // Yellow outline borders (top, bottom, left, right — 1px lines)
+        const bx = curTx * TILE_SIZE;
+        const by = curTy * TILE_SIZE;
+        const borderW = 1;
+        this.renderer.drawRect(this.camera, bx, by, TILE_SIZE, borderW, 1, 0.9, 0.2, 0.6);                   // top
+        this.renderer.drawRect(this.camera, bx, by + TILE_SIZE - borderW, TILE_SIZE, borderW, 1, 0.9, 0.2, 0.6); // bottom
+        this.renderer.drawRect(this.camera, bx, by, borderW, TILE_SIZE, 1, 0.9, 0.2, 0.6);                   // left
+        this.renderer.drawRect(this.camera, bx + TILE_SIZE - borderW, by, borderW, TILE_SIZE, 1, 0.9, 0.2, 0.6); // right
       }
     }
 
@@ -415,17 +434,18 @@ export class Game {
       }
     }
 
-    // Controls hint (only on desktop)
+    // Controls hint (only on desktop) — Terraria keybindings
     if (!this.input.touch.isMobile()) {
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.fillRect(w - 240, h - 108, 232, 100);
+      ctx.fillRect(w - 248, h - 124, 240, 116);
       ctx.fillStyle = '#888';
       ctx.font = '11px monospace';
-      ctx.fillText('A/D: Move  Space/W: Jump', w - 232, h - 90);
-      ctx.fillText('Left click: Mine / Attack', w - 232, h - 74);
-      ctx.fillText('Right click: Place block', w - 232, h - 58);
-      ctx.fillText('1-0: Select hotbar slot', w - 232, h - 42);
-      ctx.fillText('Sword slot + click = attack', w - 232, h - 26);
+      ctx.fillText('A/D: Move  Space: Jump', w - 240, h - 106);
+      ctx.fillText('Left click: Mine / Attack', w - 240, h - 90);
+      ctx.fillText('Right click: Place block', w - 240, h - 74);
+      ctx.fillText('1-0: Hotbar  Scroll: Cycle', w - 240, h - 58);
+      ctx.fillText('Esc: Inventory', w - 240, h - 42);
+      ctx.fillText('Auto-step 1-block ledges', w - 240, h - 26);
     }
 
     // Mining progress bar

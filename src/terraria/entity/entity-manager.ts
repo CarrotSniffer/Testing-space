@@ -16,6 +16,7 @@ const SPAWN_RANGE_MAX = 800; // max px from player
 export class EntityManager {
   player: PlayerEntity;
   entities: Entity[] = [];
+  lastFallDamage = 0;   // fall damage from last update tick
   private nextId = 1;
   private spawnTimer = SPAWN_INTERVAL;
 
@@ -24,7 +25,7 @@ export class EntityManager {
   }
 
   update(input: InputState, physics: PhysicsEngine, world: WorldManager) {
-    updatePlayer(this.player, input);
+    this.lastFallDamage = updatePlayer(this.player, input);
 
     for (const entity of this.entities) {
       switch (entity.type) {

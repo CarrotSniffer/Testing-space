@@ -1,6 +1,6 @@
 import { CameraState, Vec2 } from '../core/types';
 import { TILE_SIZE, WORLD_WIDTH, WORLD_HEIGHT, CHUNK_SIZE } from '../core/config';
-import { clamp, lerp } from '../core/math';
+import { clamp } from '../core/math';
 
 export function createCamera(viewportW: number, viewportH: number): CameraState {
   return {
@@ -12,10 +12,10 @@ export function createCamera(viewportW: number, viewportH: number): CameraState 
   };
 }
 
-export function cameraFollow(cam: CameraState, target: Vec2, alpha: number) {
-  const smoothing = 0.1;
-  cam.x = lerp(cam.x, target.x, smoothing);
-  cam.y = lerp(cam.y, target.y, smoothing);
+export function cameraFollow(cam: CameraState, target: Vec2, _alpha: number) {
+  // Terraria: camera snaps directly to player center, no smoothing/lerp
+  cam.x = target.x;
+  cam.y = target.y;
 
   // Clamp to world bounds
   const halfW = cam.viewportW / (2 * cam.zoom);

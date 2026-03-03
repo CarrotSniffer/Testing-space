@@ -11,6 +11,7 @@ export class InputManager {
   private mouseScreenX = 0;
   private mouseScreenY = 0;
   private inventoryPressed = false;
+  private scrollAccum = 0;  // accumulated scroll delta since last poll
 
   constructor(private canvas: HTMLCanvasElement) {
     this.touch = new TouchControls(canvas);
@@ -18,6 +19,8 @@ export class InputManager {
     this.state = {
       left: false,
       right: false,
+      up: false,
+      down: false,
       jump: false,
       attack: false,
       interact: false,
@@ -25,6 +28,7 @@ export class InputManager {
       cursorScreen: { x: 0, y: 0 },
       inventoryToggle: false,
       hotbarSelect: -1,
+      scrollDelta: 0,
     };
 
     window.addEventListener('keydown', (e) => {
@@ -48,6 +52,14 @@ export class InputManager {
       this.mouseScreenY = e.clientY;
     });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Scroll wheel for hotbar cycling (Terraria: scroll to change selected slot)
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      // Accumulate scroll — positive deltaY = scroll down = next slot
+      if (e.deltaY > 0) this.scrollAccum++;
+      else if (e.deltaY < 0) this.scrollAccum--;
+    }, { passive: false });
   }
 
   poll(camera: CameraState) {
@@ -57,6 +69,8 @@ export class InputManager {
       // Touch controls active — override keyboard
       this.state.left = this.touch.moveX < -0.3;
       this.state.right = this.touch.moveX > 0.3;
+      this.state.up = this.touch.moveY < -0.6;
+      this.state.down = this.touch.moveY > 0.6;
       this.state.jump = this.touch.jumping || this.touch.moveY < -0.6;
       this.state.attack = this.touch.attacking;
       this.state.interact = this.touch.placing;
@@ -71,29 +85,39 @@ export class InputManager {
       // Hotbar tap
       const hotbar = this.touch.consumeHotbarTap();
       this.state.hotbarSelect = hotbar;
+      this.state.scrollDelta = 0;
     } else {
-      // Keyboard + mouse
+      // Keyboard + mouse (Terraria PC controls)
       this.state.left = this.keys.has('KeyA') || this.keys.has('ArrowLeft');
       this.state.right = this.keys.has('KeyD') || this.keys.has('ArrowRight');
-      this.state.jump = this.keys.has('Space') || this.keys.has('KeyW') || this.keys.has('ArrowUp');
+      this.state.up = this.keys.has('KeyW') || this.keys.has('ArrowUp');
+      this.state.down = this.keys.has('KeyS') || this.keys.has('ArrowDown');
+
+      // Jump = Space only (Terraria: Space is jump, W/Up is for climbing ropes/platforms)
+      this.state.jump = this.keys.has('Space');
+
       this.state.attack = this.mouseDown;
       this.state.interact = this.mouseRight;
 
       this.state.cursorScreen = { x: this.mouseScreenX, y: this.mouseScreenY };
       this.state.cursorWorld = screenToWorld(camera, this.mouseScreenX * dpr, this.mouseScreenY * dpr);
 
-      // Hotbar selection via number keys
+      // Hotbar selection via number keys (1-9 = slots 0-8, 0 = slot 9)
       this.state.hotbarSelect = -1;
       for (let i = 0; i < 10; i++) {
         if (this.keys.has(`Digit${(i + 1) % 10}`)) {
           this.state.hotbarSelect = i;
         }
       }
+
+      // Scroll wheel hotbar cycling
+      this.state.scrollDelta = this.scrollAccum;
+      this.scrollAccum = 0;
     }
 
-    // Inventory toggle (consume on press) — keyboard only for now
-    const eDown = this.keys.has('KeyE');
-    this.state.inventoryToggle = eDown && !this.inventoryPressed;
-    this.inventoryPressed = eDown;
+    // Inventory toggle: Escape key (Terraria default)
+    const escDown = this.keys.has('Escape');
+    this.state.inventoryToggle = escDown && !this.inventoryPressed;
+    this.inventoryPressed = escDown;
   }
 }
